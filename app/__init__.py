@@ -83,4 +83,8 @@ def create_app(config_name='default'):
     def health_check():
         return {'status': 'healthy', 'database': 'connected'}
     
+    @app.route('/api/test')
+    def test_api():
+        return {'message': 'API is working', 'status': 'ok'}
+    
     return app
