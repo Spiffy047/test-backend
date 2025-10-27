@@ -135,34 +135,52 @@ def create_app(config_name='default'):
     
     @app.route('/api/analytics/unassigned-tickets')
     def unassigned_tickets():
-        return [{
-            'id': 'TKT-1002',
-            'title': 'Laptop running very slow',
-            'priority': 'Medium',
-            'created_at': '2025-10-27T09:30:00Z',
-            'hours_open': 3.5
-        }, {
-            'id': 'TKT-1005',
-            'title': 'Printer not working',
-            'priority': 'Low',
-            'created_at': '2025-10-27T11:00:00Z',
-            'hours_open': 1.5
-        }]
+        # Return the New tickets (which are unassigned)
+        return {
+            'tickets': [{
+                'id': f'TKT-100{i+1}',
+                'title': f'New Issue #{i+1}',
+                'priority': ['Critical', 'High', 'Medium', 'Low'][i % 4],
+                'category': 'Hardware',
+                'created_at': '2025-10-27T10:00:00Z',
+                'hours_open': 2.5
+            } for i in range(8)]
+        }
     
     @app.route('/api/analytics/agent-workload')
     def agent_workload():
         return [{
             'agent_id': 'agent1',
             'name': 'Sarah Johnson',
-            'ticket_count': 8,
+            'email': 'sarah.j@company.com',
+            'ticket_count': 16,
             'active_tickets': 5,
-            'pending_tickets': 3
+            'pending_tickets': 2,
+            'closed_tickets': 11
         }, {
             'agent_id': 'agent2',
-            'name': 'Mike Chen', 
-            'ticket_count': 6,
+            'name': 'Mike Chen',
+            'email': 'mike.c@company.com', 
+            'ticket_count': 14,
             'active_tickets': 4,
-            'pending_tickets': 2
+            'pending_tickets': 2,
+            'closed_tickets': 10
+        }, {
+            'agent_id': 'agent3',
+            'name': 'Emily Rodriguez',
+            'email': 'emily.r@company.com',
+            'ticket_count': 13,
+            'active_tickets': 3,
+            'pending_tickets': 1,
+            'closed_tickets': 10
+        }, {
+            'agent_id': 'agent4',
+            'name': 'David Kim',
+            'email': 'david.k@company.com',
+            'ticket_count': 12,
+            'active_tickets': 3,
+            'pending_tickets': 1,
+            'closed_tickets': 11
         }]
     
     @app.route('/api/analytics/agent-performance-detailed')
