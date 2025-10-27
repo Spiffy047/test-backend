@@ -68,9 +68,10 @@ def create_app(config_name='default'):
     
     swagger.init_app(app, config=swagger_config, template=swagger_template)
     
-    # CORS configuration
+    # CORS configuration - Allow Netlify frontend
+    cors_origins = os.environ.get('CORS_ORIGINS', 'https://hotfixsdm.netlify.app,http://localhost:5173').split(',')
     CORS(app, 
-         resources={r"/api/*": {"origins": "*"}},
+         resources={r"/api/*": {"origins": cors_origins}},
          supports_credentials=True,
          allow_headers=["Content-Type", "Authorization"],
          methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
