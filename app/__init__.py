@@ -168,29 +168,57 @@ def create_app(config_name='default'):
     @app.route('/api/analytics/agent-performance-detailed')
     def agent_performance_detailed():
         return [{
+            'agent_id': 'agent1',
             'id': 'agent1',
             'name': 'Sarah Johnson',
-            'tickets_closed': 28,
+            'email': 'sarah.j@company.com',
+            'active_tickets': 5,
+            'closed_tickets': 28,
             'avg_handle_time': 3.8,
             'sla_violations': 1,
             'rating': 'Excellent',
+            'performance_rating': 'Excellent',
+            'performance_score': 95,
             'satisfaction_score': 4.8
         }, {
+            'agent_id': 'agent2',
             'id': 'agent2',
             'name': 'Mike Chen',
-            'tickets_closed': 22,
+            'email': 'mike.c@company.com',
+            'active_tickets': 4,
+            'closed_tickets': 22,
             'avg_handle_time': 4.5,
             'sla_violations': 3,
             'rating': 'Good',
+            'performance_rating': 'Good',
+            'performance_score': 78,
             'satisfaction_score': 4.3
         }, {
+            'agent_id': 'agent3',
             'id': 'agent3',
             'name': 'Emily Rodriguez',
-            'tickets_closed': 19,
+            'email': 'emily.r@company.com',
+            'active_tickets': 3,
+            'closed_tickets': 19,
             'avg_handle_time': 5.2,
             'sla_violations': 2,
             'rating': 'Good',
+            'performance_rating': 'Good',
+            'performance_score': 72,
             'satisfaction_score': 4.1
+        }, {
+            'agent_id': 'agent4',
+            'id': 'agent4',
+            'name': 'David Kim',
+            'email': 'david.k@company.com',
+            'active_tickets': 2,
+            'closed_tickets': 15,
+            'avg_handle_time': 6.1,
+            'sla_violations': 4,
+            'rating': 'Average',
+            'performance_rating': 'Average',
+            'performance_score': 58,
+            'satisfaction_score': 3.9
         }]
     
     @app.route('/api/alerts/<user_id>/count')
@@ -337,5 +365,45 @@ def create_app(config_name='default'):
     @app.route('/api/alerts/<user_id>/read-all', methods=['PUT'])
     def mark_all_alerts_read(user_id):
         return {'success': True, 'message': 'All alerts marked as read'}
+    
+    @app.route('/api/analytics/ticket-aging')
+    def ticket_aging():
+        return {
+            '0-24h': {'count': 12, 'tickets': []},
+            '24-48h': {'count': 8, 'tickets': []},
+            '48-72h': {'count': 5, 'tickets': []},
+            '72h+': {'count': 3, 'tickets': []}
+        }
+    
+    @app.route('/api/analytics/sla-violations')
+    def sla_violations():
+        return [{
+            'ticket_id': 'TKT-1001',
+            'title': 'Email access issue',
+            'priority': 'High',
+            'hours_overdue': 2.5,
+            'assigned_to': 'agent1'
+        }, {
+            'ticket_id': 'TKT-1003',
+            'title': 'VPN connection problems',
+            'priority': 'High', 
+            'hours_overdue': 1.2,
+            'assigned_to': 'agent2'
+        }]
+    
+    @app.route('/api/export/tickets/excel')
+    def export_tickets():
+        # Return CSV data for Excel export
+        csv_data = '''ID,Title,Status,Priority,Category,Created,Assigned
+TKT-1001,Unable to access company email,Open,High,Email & Communication,2025-10-27,agent1
+TKT-1002,Laptop running very slow,New,Medium,Hardware,2025-10-27,
+TKT-1003,VPN connection issues,Pending,High,Network & Connectivity,2025-10-27,agent2'''
+        
+        from flask import Response
+        return Response(
+            csv_data,
+            mimetype='text/csv',
+            headers={'Content-Disposition': 'attachment; filename=tickets.csv'}
+        )
     
     return app
