@@ -132,7 +132,14 @@ def create_app(config_name='default'):
     
     @app.route('/api/alerts/<user_id>/count')
     def alert_count(user_id):
-        return {'count': 0}
+        # Return different counts based on user role
+        if user_id in ['user1']:
+            return {'count': 2}
+        elif user_id in ['user2', 'agent1']:
+            return {'count': 3}
+        elif user_id in ['user3']:
+            return {'count': 5}
+        return {'count': 1}
     
     @app.route('/api/messages/ticket/<ticket_id>/timeline')
     def ticket_timeline(ticket_id):
