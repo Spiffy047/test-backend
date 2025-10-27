@@ -91,13 +91,13 @@ def create_app(config_name='default'):
     def sla_adherence():
         return {
             'sla_adherence': 87.2,
-            'total_tickets': 125,
-            'violations': 16,
-            'on_time': 109,
-            'critical_violations': 3,
-            'high_violations': 6,
-            'medium_violations': 5,
-            'low_violations': 2,
+            'total_tickets': 71,
+            'violations': 9,
+            'on_time': 62,
+            'critical_violations': 2,
+            'high_violations': 3,
+            'medium_violations': 3,
+            'low_violations': 1,
             'trend': 'improving'
         }
     
@@ -387,10 +387,14 @@ def create_app(config_name='default'):
     @app.route('/api/analytics/ticket-aging')
     def ticket_aging():
         return {
-            '0-24h': {'count': 12, 'tickets': []},
-            '24-48h': {'count': 8, 'tickets': []},
-            '48-72h': {'count': 5, 'tickets': []},
-            '72h+': {'count': 3, 'tickets': []}
+            'aging_data': [
+                {'age_range': '0-24h', 'count': 12},
+                {'age_range': '24-48h', 'count': 8},
+                {'age_range': '48-72h', 'count': 5},
+                {'age_range': '72h+', 'count': 3}
+            ],
+            'total_open_tickets': 28,
+            'average_age_hours': 18.5
         }
     
     @app.route('/api/analytics/sla-violations')
