@@ -551,14 +551,22 @@ TKT-1003,VPN connection issues,Pending,High,Network & Connectivity,2025-10-27,ag
             'success': True
         }
     
-    @app.route('/api/users', methods=['GET', 'POST', 'PUT', 'DELETE'])
+    @app.route('/api/users', methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
     def users():
+        if request.method == 'OPTIONS':
+            return '', 200
+            
         sample_users = [
             {'id': 'user1', 'name': 'John Smith', 'email': 'john.smith@company.com', 'role': 'Normal User'},
-            {'id': 'user2', 'name': 'Jane Doe', 'email': 'jane.doe@company.com', 'role': 'Normal User'},
-            {'id': 'user3', 'name': 'Bob Wilson', 'email': 'bob.wilson@company.com', 'role': 'Technical Supervisor'},
-            {'id': 'agent1', 'name': 'Sarah Johnson', 'email': 'sarah.j@company.com', 'role': 'Technical User'},
-            {'id': 'agent2', 'name': 'Mike Chen', 'email': 'mike.c@company.com', 'role': 'Technical User'}
+            {'id': 'user2', 'name': 'Maria Garcia', 'email': 'maria.garcia@company.com', 'role': 'Technical User'},
+            {'id': 'user3', 'name': 'Robert Chen', 'email': 'robert.chen@company.com', 'role': 'Technical Supervisor'},
+            {'id': 'user4', 'name': 'Admin User', 'email': 'admin@company.com', 'role': 'System Admin'},
+            {'id': 'user5', 'name': 'Alice Johnson', 'email': 'alice.johnson@company.com', 'role': 'Normal User'},
+            {'id': 'user6', 'name': 'Bob Williams', 'email': 'bob.williams@company.com', 'role': 'Normal User'},
+            {'id': 'user7', 'name': 'Carol Davis', 'email': 'carol.davis@company.com', 'role': 'Normal User'},
+            {'id': 'user8', 'name': 'David Brown', 'email': 'david.brown@company.com', 'role': 'Technical User'},
+            {'id': 'user9', 'name': 'Emma Wilson', 'email': 'emma.wilson@company.com', 'role': 'Technical User'},
+            {'id': 'user10', 'name': 'Frank Miller', 'email': 'frank.miller@company.com', 'role': 'Technical Supervisor'}
         ]
         return sample_users
     
