@@ -406,4 +406,71 @@ TKT-1003,VPN connection issues,Pending,High,Network & Connectivity,2025-10-27,ag
             headers={'Content-Disposition': 'attachment; filename=tickets.csv'}
         )
     
+    @app.route('/api/sla/realtime-adherence')
+    def realtime_sla_adherence():
+        return {
+            'overall': {
+                'total_tickets': 125,
+                'closed_met_sla': 89,
+                'closed_violated_sla': 16,
+                'closed_adherence_percentage': 84.8,
+                'open_violated': 4,
+                'open_at_risk': 12
+            },
+            'priority_breakdown': {
+                'Critical': {
+                    'met_sla': 8,
+                    'violated_sla': 3,
+                    'adherence_percentage': 72.7,
+                    'target_hours': 4
+                },
+                'High': {
+                    'met_sla': 22,
+                    'violated_sla': 6,
+                    'adherence_percentage': 78.6,
+                    'target_hours': 8
+                },
+                'Medium': {
+                    'met_sla': 35,
+                    'violated_sla': 5,
+                    'adherence_percentage': 87.5,
+                    'target_hours': 24
+                },
+                'Low': {
+                    'met_sla': 24,
+                    'violated_sla': 2,
+                    'adherence_percentage': 92.3,
+                    'target_hours': 72
+                }
+            },
+            'average_resolution_times': {
+                'Critical': {
+                    'average_hours': 3.2,
+                    'target_hours': 4,
+                    'within_target': True
+                },
+                'High': {
+                    'average_hours': 9.1,
+                    'target_hours': 8,
+                    'within_target': False
+                },
+                'Medium': {
+                    'average_hours': 18.5,
+                    'target_hours': 24,
+                    'within_target': True
+                },
+                'Low': {
+                    'average_hours': 45.2,
+                    'target_hours': 72,
+                    'within_target': True
+                }
+            },
+            'sla_targets': {
+                'Critical': 4,
+                'High': 8,
+                'Medium': 24,
+                'Low': 72
+            }
+        }
+    
     return app
