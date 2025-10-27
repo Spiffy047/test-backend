@@ -403,15 +403,41 @@ def create_app(config_name='default'):
     
     @app.route('/api/analytics/ticket-aging')
     def ticket_aging():
+        from datetime import datetime, timedelta
+        now = datetime.utcnow()
+        
+        aging_buckets = {
+            '0-24h': [],
+            '24-48h': [],
+            '48-72h': [],
+            '72h+': []
+        }
+        
+        # Categorize open tickets by age
+        for ticket in tickets_store:
+            if ticket['status'] != 'Closed':
+                created = datetime.fromisoformat(ticket['created_at'].replace('Z', '+00:00'))
+                hours_old = (now - created).total_seconds() / 3600
+                
+                if hours_old <= 24:
+                    aging_buckets['0-24h'].append(ticket)
+                elif hours_old <= 48:
+                    aging_buckets['24-48h'].append(ticket)
+                elif hours_old <= 72:
+                    aging_buckets['48-72h'].append(ticket)
+                else:
+                    aging_buckets['72h+'].append(ticket)
+        
         return {
             'aging_data': [
-                {'age_range': '0-24h', 'count': 12},
-                {'age_range': '24-48h', 'count': 8},
-                {'age_range': '48-72h', 'count': 5},
-                {'age_range': '72h+', 'count': 3}
+                {'age_range': '0-24h', 'count': len(aging_buckets['0-24h'])},
+                {'age_range': '24-48h', 'count': len(aging_buckets['24-48h'])},
+                {'age_range': '48-72h', 'count': len(aging_buckets['48-72h'])},
+                {'age_range': '72h+', 'count': len(aging_buckets['72h+'])}
             ],
-            'total_open_tickets': 28,
-            'average_age_hours': 18.5
+            'buckets': aging_buckets,
+            'total_open_tickets': sum(len(bucket) for bucket in aging_buckets.values()),
+            'average_age_hours': 48.5
         }
     
     @app.route('/api/analytics/sla-violations')
@@ -542,6 +568,42 @@ TKT-1003,VPN connection issues,Pending,High,Network & Connectivity,2025-10-27,ag
                 ticket.update(data)
                 return ticket
         return {'error': 'Ticket not found'}, 404
+    
+    @app.route('/api/users', methods=['GET', 'POST', 'PUT', 'DELETE'])
+    def users():
+        sample_users = [
+            {'id': 'user1', 'name': 'John Smith', 'email': 'john.smith@company.com', 'role': 'Normal User'},
+            {'id': 'user2', 'name': 'Jane Doe', 'email': 'jane.doe@company.com', 'role': 'Normal User'},
+            {'id': 'user3', 'name': 'Bob Wilson', 'email': 'bob.wilson@company.com', 'role': 'Technical Supervisor'},
+            {'id': 'agent1', 'name': 'Sarah Johnson', 'email': 'sarah.j@company.com', 'role': 'Technical User'},
+            {'id': 'agent2', 'name': 'Mike Chen', 'email': 'mike.c@company.com', 'role': 'Technical User'}
+        ]
+        return sample_users
+    
+    @app.route('/api/users/<user_id>', methods=['PUT', 'DELETE'])
+    def user_detail(user_id):
+        if request.method == 'PUT':
+            return {'success': True, 'message': 'User updated'}
+        elif request.method == 'DELETE':
+            return {'success': True, 'message': 'User deleted'}
+    
+    @app.route('/api/alerts/<user_id>')
+    def user_alerts(user_id):
+        return [
+            {
+                'id': 'alert1',
+                'title': 'SLA Violation',
+                'message': 'Ticket TKT-2001 has violated SLA',
+                'type': 'sla_breach',
+                'ticket_id': 'TKT-2001',
+                'created_at': '2025-01-27T10:00:00Z',
+                'read': False
+            }
+        ]
+    
+    @app.route('/api/files/download/<file_id>')
+    def download_file(file_id):
+        return {'message': 'File download endpoint', 'file_id': file_id}
     
     @app.route('/api/sla/realtime-adherence')
     def realtime_sla_adherence():
