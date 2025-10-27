@@ -233,4 +233,12 @@ def create_app(config_name='default'):
         messages_store[ticket_id].append(new_message)
         return new_message, 201
     
+    @app.route('/api/alerts/<alert_id>/read', methods=['PUT'])
+    def mark_alert_read(alert_id):
+        return {'success': True, 'message': 'Alert marked as read'}
+    
+    @app.route('/api/alerts/<user_id>/read-all', methods=['PUT'])
+    def mark_all_alerts_read(user_id):
+        return {'success': True, 'message': 'All alerts marked as read'}
+    
     return app
