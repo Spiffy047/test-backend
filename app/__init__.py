@@ -38,11 +38,9 @@ def create_app(config_name='default'):
     
     # Swagger disabled for deployment stability
     
-    # CORS configuration - Allow Netlify frontend
-    cors_origins = os.environ.get('CORS_ORIGINS', 'https://hotfixsdm.netlify.app,http://localhost:5173').split(',')
+    # CORS configuration - Allow all origins for deployment
     CORS(app, 
-         resources={r"/api/*": {"origins": cors_origins}},
-         supports_credentials=True,
+         resources={r"/*": {"origins": "*"}},
          allow_headers=["Content-Type", "Authorization"],
          methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
     

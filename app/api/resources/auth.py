@@ -5,30 +5,11 @@ from app import db
 from app.models.user import User
 from app.models.auth import UserAuth
 from app.services.email_service import EmailService
-from flasgger import swag_from
+# from flasgger import swag_from  # Disabled for deployment
 import uuid
 
 class LoginResource(Resource):
-    @swag_from({
-        'tags': ['Authentication'],
-        'summary': 'User login',
-        'parameters': [{
-            'name': 'body',
-            'in': 'body',
-            'required': True,
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'email': {'type': 'string'},
-                    'password': {'type': 'string'}
-                }
-            }
-        }],
-        'responses': {
-            200: {'description': 'Login successful'},
-            401: {'description': 'Invalid credentials'}
-        }
-    })
+    # Swagger documentation disabled for deployment
     def post(self):
         data = request.get_json()
         email = data.get('email')
@@ -55,28 +36,7 @@ class LoginResource(Resource):
         return {'message': 'Invalid credentials'}, 401
 
 class RegisterResource(Resource):
-    @swag_from({
-        'tags': ['Authentication'],
-        'summary': 'User registration',
-        'parameters': [{
-            'name': 'body',
-            'in': 'body',
-            'required': True,
-            'schema': {
-                'type': 'object',
-                'properties': {
-                    'name': {'type': 'string'},
-                    'email': {'type': 'string'},
-                    'password': {'type': 'string'},
-                    'role': {'type': 'string'}
-                }
-            }
-        }],
-        'responses': {
-            201: {'description': 'User registered successfully'},
-            400: {'description': 'Email already exists'}
-        }
-    })
+    # Swagger documentation disabled for deployment
     def post(self):
         data = request.get_json()
         
