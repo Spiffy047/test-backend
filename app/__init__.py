@@ -41,8 +41,9 @@ def create_app(config_name='default'):
     # CORS configuration - Allow all origins for deployment
     CORS(app, 
          resources={r"/*": {"origins": "*"}},
-         allow_headers=["Content-Type", "Authorization"],
-         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+         allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+         supports_credentials=False)
     
     # Register Flask-RESTful API
     from app.api import api_bp
@@ -86,6 +87,36 @@ def create_app(config_name='default'):
     @app.route('/api/test')
     def test_api():
         return {'message': 'API is working', 'status': 'ok'}
+    
+    @app.route('/api/auth/login', methods=['POST', 'OPTIONS'])
+    def auth_login():
+        if request.method == 'OPTIONS':
+            return '', 200
+        
+        try:
+            data = request.get_json() or {}
+            email = data.get('email', '')
+            
+            # Simple auth without database
+            users = {
+                'john.smith@company.com': {'id': 'user1', 'name': 'John Smith', 'role': 'Normal User'},
+                'maria.garcia@company.com': {'id': 'user2', 'name': 'Maria Garcia', 'role': 'Technical User'},
+                'robert.chen@company.com': {'id': 'user3', 'name': 'Robert Chen', 'role': 'Technical Supervisor'},
+                'admin@company.com': {'id': 'user4', 'name': 'Admin User', 'role': 'System Admin'}
+            }
+            
+            if email in users:
+                user = users[email]
+                return {
+                    'success': True,
+                    'user': user,
+                    'token': f'fake-jwt-token-{user["id"]}'
+                }
+            else:
+                return {'success': False, 'message': 'Invalid credentials'}, 401
+                
+        except Exception as e:
+            return {'success': False, 'message': str(e)}, 500
     
     @app.route('/api/tickets/analytics/sla-adherence')
     def sla_adherence():
