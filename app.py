@@ -113,9 +113,9 @@ if __name__ == '__main__':
     if os.getenv('INIT_DB', 'false').lower() == 'true':
         init_db()
     
-    # Start SLA monitoring
-    from app.tasks.scheduler import sla_monitor
-    sla_monitor.start()
+    # SLA monitoring disabled for deployment
+    # from app.tasks.scheduler import sla_monitor
+    # sla_monitor.start()
     
     try:
         # Production configuration
@@ -123,4 +123,4 @@ if __name__ == '__main__':
         debug = os.environ.get('FLASK_ENV') != 'production'
         app.run(debug=debug, host='0.0.0.0', port=port)
     finally:
-        sla_monitor.stop()
+        pass  # sla_monitor.stop() disabled

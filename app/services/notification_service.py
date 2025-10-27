@@ -4,7 +4,8 @@ from datetime import datetime
 from app.models.ticket import Ticket
 from app.models.user import User, Agent
 from app.models.alert import Alert
-from app import db, socketio
+from app import db
+# socketio disabled for deployment
 import uuid
 
 class NotificationService:
@@ -24,8 +25,8 @@ class NotificationService:
         for supervisor in supervisors:
             NotificationService._create_sla_alert(ticket, supervisor.id)
         
-        # Send real-time WebSocket notification
-        NotificationService._emit_sla_breach(ticket)
+        # WebSocket notifications disabled for deployment
+        # NotificationService._emit_sla_breach(ticket)
         
         return True
     
@@ -42,17 +43,7 @@ class NotificationService:
         )
         db.session.add(alert)
     
-    @staticmethod
-    def _emit_sla_breach(ticket: Ticket):
-        """Emit real-time SLA breach notification"""
-        socketio.emit('sla_breach', {
-            'ticket_id': ticket.id,
-            'title': ticket.title,
-            'priority': ticket.priority,
-            'assigned_to': ticket.assigned_to,
-            'hours_open': ticket.hours_open,
-            'message': f'Ticket {ticket.id} has breached SLA'
-        }, room='technical_users')
+    # WebSocket methods disabled for deployment
     
     @staticmethod
     def notify_ticket_assignment(ticket: Ticket, agent: Agent, performed_by: str = None) -> bool:
@@ -68,14 +59,7 @@ class NotificationService:
             performed_by=performed_by
         )
         
-        # Real-time notification
-        socketio.emit('ticket_assigned', {
-            'ticket_id': ticket.id,
-            'title': ticket.title,
-            'priority': ticket.priority,
-            'assigned_to': ticket.assigned_to,
-            'message': f'New ticket assigned: {ticket.id}'
-        }, room=f'user_{ticket.assigned_to}')
+        # Real-time notifications disabled for deployment
         
         return True
     
@@ -93,25 +77,7 @@ class NotificationService:
             performed_by=performed_by
         )
         
-        # Real-time notification to ticket creator
-        if ticket.created_by:
-            socketio.emit('ticket_updated', {
-                'ticket_id': ticket.id,
-                'title': ticket.title,
-                'old_status': old_status,
-                'new_status': new_status,
-                'message': f'Your ticket {ticket.id} status changed to {new_status}'
-            }, room=f'user_{ticket.created_by}')
-        
-        # Real-time notification to assigned agent
-        if ticket.assigned_to and ticket.assigned_to != performed_by:
-            socketio.emit('ticket_updated', {
-                'ticket_id': ticket.id,
-                'title': ticket.title,
-                'old_status': old_status,
-                'new_status': new_status,
-                'message': f'Ticket {ticket.id} status changed to {new_status}'
-            }, room=f'user_{ticket.assigned_to}')
+        # Real-time notifications disabled for deployment
         
         return True
     
@@ -143,13 +109,7 @@ class NotificationService:
             performed_by=performed_by
         )
         
-        # Real-time notification
-        socketio.emit('ticket_updated', {
-            'ticket_id': ticket.id,
-            'title': ticket.title,
-            'update_type': update_type,
-            'message': message
-        }, room=f'ticket_{ticket.id}')
+        # Real-time notifications disabled for deployment
         
         return True
     
@@ -178,13 +138,7 @@ class NotificationService:
             )
             db.session.add(alert)
         
-        # Real-time notification
-        socketio.emit('new_message_notification', {
-            'ticket_id': ticket.id,
-            'sender_name': sender_name,
-            'sender_role': sender_role,
-            'message': message[:100] + '...' if len(message) > 100 else message
-        }, room=f'ticket_{ticket.id}')
+        # Real-time notifications disabled for deployment
         
         return True
     
@@ -207,14 +161,7 @@ class NotificationService:
             )
             db.session.add(alert)
         
-        # Real-time notification
-        socketio.emit('new_ticket', {
-            'ticket_id': ticket.id,
-            'title': ticket.title,
-            'priority': ticket.priority,
-            'category': ticket.category,
-            'created_by': ticket.created_by
-        }, room='technical_users')
+        # Real-time notifications disabled for deployment
         
         return True
     
