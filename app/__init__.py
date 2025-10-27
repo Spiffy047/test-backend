@@ -343,6 +343,23 @@ def create_app(config_name='default'):
                 uploaded_files[ticket_id] = []
             uploaded_files[ticket_id].append(file_info)
             
+            # Add file upload to timeline
+            if ticket_id not in messages_store:
+                messages_store[ticket_id] = []
+            
+            from datetime import datetime
+            upload_message = {
+                'id': f'file_msg_{len(messages_store[ticket_id]) + 100}',
+                'ticket_id': ticket_id,
+                'sender_id': uploaded_by,
+                'sender_name': 'User',
+                'sender_role': 'Normal User',
+                'message': f'Uploaded file: {file.filename}',
+                'timestamp': datetime.utcnow().isoformat() + 'Z',
+                'type': 'message'
+            }
+            messages_store[ticket_id].append(upload_message)
+            
             return file_info, 200
             
         except Exception as e:
@@ -427,6 +444,104 @@ TKT-1003,VPN connection issues,Pending,High,Network & Connectivity,2025-10-27,ag
             mimetype='text/csv',
             headers={'Content-Disposition': 'attachment; filename=tickets.csv'}
         )
+    
+    # Global ticket storage (in production, use database)
+    tickets_store = [
+        {
+            'id': 'TKT-1001',
+            'title': 'Unable to access company email',
+            'description': 'Getting authentication failed error when trying to log into Outlook',
+            'status': 'Open',
+            'priority': 'High',
+            'category': 'Email & Communication',
+            'created_by': 'user1',
+            'assigned_to': 'agent1',
+            'created_at': '2025-01-27T10:00:00Z',
+            'sla_violated': False
+        },
+        {
+            'id': 'TKT-2001',
+            'title': 'Open Issue #1',
+            'description': 'System performance degradation',
+            'status': 'Open',
+            'priority': 'Critical',
+            'category': 'Hardware',
+            'created_by': 'user2',
+            'assigned_to': 'agent1',
+            'created_at': '2025-01-25T08:00:00Z',
+            'sla_violated': True
+        },
+        {
+            'id': 'TKT-2002',
+            'title': 'Open Issue #2',
+            'description': 'Network connectivity problems',
+            'status': 'Open',
+            'priority': 'High',
+            'category': 'Network',
+            'created_by': 'user3',
+            'assigned_to': 'agent2',
+            'created_at': '2025-01-25T09:00:00Z',
+            'sla_violated': True
+        },
+        {
+            'id': 'TKT-2003',
+            'title': 'Open Issue #3',
+            'description': 'Software installation failure',
+            'status': 'Open',
+            'priority': 'Medium',
+            'category': 'Software',
+            'created_by': 'user1',
+            'assigned_to': 'agent1',
+            'created_at': '2025-01-25T11:00:00Z',
+            'sla_violated': True
+        },
+        {
+            'id': 'TKT-3001',
+            'title': 'Pending Issue #1',
+            'description': 'Waiting for user response',
+            'status': 'Pending',
+            'priority': 'Medium',
+            'category': 'Other',
+            'created_by': 'user2',
+            'assigned_to': 'agent2',
+            'created_at': '2025-01-26T14:00:00Z',
+            'sla_violated': True
+        }
+    ]
+    
+    @app.route('/api/tickets', methods=['GET', 'POST'])
+    def tickets():
+        if request.method == 'POST':
+            data = request.get_json()
+            new_ticket = {
+                'id': f'TKT-{len(tickets_store) + 1001}',
+                'title': data.get('title'),
+                'description': data.get('description'),
+                'status': 'New',
+                'priority': data.get('priority'),
+                'category': data.get('category'),
+                'created_by': data.get('created_by'),
+                'assigned_to': None,
+                'created_at': '2025-01-27T12:00:00Z',
+                'sla_violated': False
+            }
+            tickets_store.append(new_ticket)
+            return new_ticket, 201
+        
+        # GET request
+        created_by = request.args.get('created_by')
+        if created_by:
+            return [t for t in tickets_store if t.get('created_by') == created_by]
+        return tickets_store
+    
+    @app.route('/api/tickets/<ticket_id>', methods=['PUT'])
+    def update_ticket(ticket_id):
+        data = request.get_json()
+        for ticket in tickets_store:
+            if ticket['id'] == ticket_id:
+                ticket.update(data)
+                return ticket
+        return {'error': 'Ticket not found'}, 404
     
     @app.route('/api/sla/realtime-adherence')
     def realtime_sla_adherence():
