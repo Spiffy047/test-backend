@@ -89,7 +89,17 @@ def create_app(config_name='default'):
     
     @app.route('/api/tickets/analytics/sla-adherence')
     def sla_adherence():
-        return {'sla_adherence': 85.5, 'total_tickets': 100, 'violations': 15}
+        return {
+            'sla_adherence': 87.2,
+            'total_tickets': 125,
+            'violations': 16,
+            'on_time': 109,
+            'critical_violations': 3,
+            'high_violations': 6,
+            'medium_violations': 5,
+            'low_violations': 2,
+            'trend': 'improving'
+        }
     
     @app.route('/api/agents/performance')
     def agent_performance():
@@ -116,19 +126,72 @@ def create_app(config_name='default'):
     
     @app.route('/api/analytics/ticket-status-counts')
     def ticket_status_counts():
-        return {'new': 5, 'open': 12, 'pending': 3, 'closed': 25}
+        return {
+            'new': 8,
+            'open': 15, 
+            'pending': 6,
+            'closed': 42
+        }
     
     @app.route('/api/analytics/unassigned-tickets')
     def unassigned_tickets():
-        return [{'id': 'TKT-1002', 'title': 'Laptop running very slow', 'priority': 'Medium'}]
+        return [{
+            'id': 'TKT-1002',
+            'title': 'Laptop running very slow',
+            'priority': 'Medium',
+            'created_at': '2025-10-27T09:30:00Z',
+            'hours_open': 3.5
+        }, {
+            'id': 'TKT-1005',
+            'title': 'Printer not working',
+            'priority': 'Low',
+            'created_at': '2025-10-27T11:00:00Z',
+            'hours_open': 1.5
+        }]
     
     @app.route('/api/analytics/agent-workload')
     def agent_workload():
-        return [{'agent_id': 'agent1', 'name': 'Sarah Johnson', 'ticket_count': 8}]
+        return [{
+            'agent_id': 'agent1',
+            'name': 'Sarah Johnson',
+            'ticket_count': 8,
+            'active_tickets': 5,
+            'pending_tickets': 3
+        }, {
+            'agent_id': 'agent2',
+            'name': 'Mike Chen', 
+            'ticket_count': 6,
+            'active_tickets': 4,
+            'pending_tickets': 2
+        }]
     
     @app.route('/api/analytics/agent-performance-detailed')
     def agent_performance_detailed():
-        return [{'id': 'agent1', 'name': 'Sarah Johnson', 'tickets_closed': 25, 'avg_handle_time': 4.2, 'sla_violations': 2, 'rating': 'Excellent'}]
+        return [{
+            'id': 'agent1',
+            'name': 'Sarah Johnson',
+            'tickets_closed': 28,
+            'avg_handle_time': 3.8,
+            'sla_violations': 1,
+            'rating': 'Excellent',
+            'satisfaction_score': 4.8
+        }, {
+            'id': 'agent2',
+            'name': 'Mike Chen',
+            'tickets_closed': 22,
+            'avg_handle_time': 4.5,
+            'sla_violations': 3,
+            'rating': 'Good',
+            'satisfaction_score': 4.3
+        }, {
+            'id': 'agent3',
+            'name': 'Emily Rodriguez',
+            'tickets_closed': 19,
+            'avg_handle_time': 5.2,
+            'sla_violations': 2,
+            'rating': 'Good',
+            'satisfaction_score': 4.1
+        }]
     
     @app.route('/api/alerts/<user_id>/count')
     def alert_count(user_id):
@@ -183,27 +246,61 @@ def create_app(config_name='default'):
     
     @app.route('/api/files/ticket/<ticket_id>')
     def ticket_files(ticket_id):
-        # Return sample attachment for demonstration
+        files = []
+        
+        # Add sample attachment for TKT-1001
         if ticket_id == 'TKT-1001':
-            return [{
+            files.append({
                 'id': 'file1',
                 'filename': 'error_screenshot.png',
                 'file_size_mb': '0.5',
                 'download_url': '/api/files/download/file1',
                 'uploaded_by': 'user1',
                 'uploaded_at': '2025-10-27T10:35:00Z'
-            }]
-        return []
+            })
+        
+        # Add any uploaded files for this ticket
+        if ticket_id in uploaded_files:
+            files.extend(uploaded_files[ticket_id])
+        
+        return files
+    
+    # File storage for uploaded files
+    uploaded_files = {}
     
     @app.route('/api/files/upload', methods=['POST'])
     def upload_file():
-        # Simulate successful file upload
-        return {
-            'id': 'file_new',
-            'filename': 'uploaded_file.pdf',
-            'file_size_mb': '1.2',
-            'message': 'File uploaded successfully'
-        }, 200
+        try:
+            if 'file' not in request.files:
+                return {'error': 'No file provided'}, 400
+            
+            file = request.files['file']
+            ticket_id = request.form.get('ticket_id', 'unknown')
+            uploaded_by = request.form.get('uploaded_by', 'unknown')
+            
+            if file.filename == '':
+                return {'error': 'No file selected'}, 400
+            
+            # Store file info (in production, save to cloud storage)
+            file_id = f'file_{len(uploaded_files) + 1}'
+            file_info = {
+                'id': file_id,
+                'filename': file.filename,
+                'file_size_mb': round(len(file.read()) / (1024 * 1024), 2),
+                'ticket_id': ticket_id,
+                'uploaded_by': uploaded_by,
+                'download_url': f'/api/files/download/{file_id}',
+                'uploaded_at': '2025-10-27T12:30:00Z'
+            }
+            
+            if ticket_id not in uploaded_files:
+                uploaded_files[ticket_id] = []
+            uploaded_files[ticket_id].append(file_info)
+            
+            return file_info, 200
+            
+        except Exception as e:
+            return {'error': str(e)}, 500
     
     # Global message storage per ticket (in production, use database)
     messages_store = {}
