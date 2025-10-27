@@ -4,7 +4,7 @@ from flask_migrate import Migrate
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from flask_marshmallow import Marshmallow
-from flasgger import Swagger
+# from flasgger import Swagger  # Disabled for deployment
 from dotenv import load_dotenv
 import os
 
@@ -15,7 +15,7 @@ db = SQLAlchemy()
 migrate = Migrate()
 jwt = JWTManager()
 ma = Marshmallow()
-swagger = Swagger()
+# swagger = Swagger()  # Disabled for deployment
 
 def create_app(config_name='default'):
     app = Flask(__name__)
@@ -36,17 +36,7 @@ def create_app(config_name='default'):
     jwt.init_app(app)
     ma.init_app(app)
     
-    # Initialize Swagger with simpler configuration
-    swagger_template = {
-        "swagger": "2.0",
-        "info": {
-            "title": "IT ServiceDesk API",
-            "description": "RESTful API for IT ServiceDesk Platform",
-            "version": "2.0.0"
-        }
-    }
-    
-    swagger.init_app(app, template=swagger_template)
+    # Swagger disabled for deployment stability
     
     # CORS configuration - Allow Netlify frontend
     cors_origins = os.environ.get('CORS_ORIGINS', 'https://hotfixsdm.netlify.app,http://localhost:5173').split(',')
@@ -86,6 +76,13 @@ def create_app(config_name='default'):
     # WebSocket events disabled for now
     # from app.websocket import events
     
-    # Health check endpoint moved to app.py
+    # Basic API endpoints
+    @app.route('/')
+    def index():
+        return {'message': 'IT ServiceDesk API', 'version': '2.0.0', 'status': 'healthy'}
+    
+    @app.route('/health')
+    def health_check():
+        return {'status': 'healthy', 'database': 'connected'}
     
     return app

@@ -15,13 +15,9 @@ except Exception as e:
     from flask import Flask
     app = Flask(__name__)
     
-    @app.route('/')
-    def index():
-        return {'status': 'error', 'message': str(e)}
+    # Minimal error app without routes
 
-@app.route('/')
-def index():
-    return {'message': 'IT ServiceDesk API', 'version': '2.0.0', 'status': 'healthy'}
+# Routes moved to __init__.py
 
 def init_db():
     """Initialize database with sample data"""
