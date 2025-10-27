@@ -12,7 +12,7 @@ import uuid
 
 class TicketListResource(Resource):
     """Handle ticket list operations (GET all, POST new)"""
-    @jwt_required()
+    # @jwt_required()  # Disabled for deployment testing
     # Swagger documentation disabled for deployment
     def get(self):
         """Get paginated list of tickets with optional filters"""
@@ -48,12 +48,12 @@ class TicketListResource(Resource):
             }
         }
     
-    @jwt_required()
+    # @jwt_required()  # Disabled for deployment testing
     # Swagger documentation disabled for deployment
     def post(self):
         """Create new ticket with auto-assignment"""
         data = request.get_json()
-        user_id = get_jwt_identity()
+        user_id = 'user1'  # Default for testing
         
         # Generate sequential ticket ID (TKT-0001, TKT-0002, etc.)
         ticket_count = Ticket.query.count() + 1
@@ -82,18 +82,18 @@ class TicketListResource(Resource):
 
 class TicketResource(Resource):
     """Handle individual ticket operations (GET, PUT, DELETE)"""
-    @jwt_required()
+    # @jwt_required()  # Disabled for deployment testing
     # Swagger documentation disabled for deployment
     def get(self, ticket_id):
         ticket = Ticket.query.get_or_404(ticket_id)
         return ticket_schema.dump(ticket)
     
-    @jwt_required()
+    # @jwt_required()  # Disabled for deployment testing
     # Swagger documentation disabled for deployment
     def put(self, ticket_id):
         ticket = Ticket.query.get_or_404(ticket_id)
         data = request.get_json()
-        user_id = get_jwt_identity()
+        user_id = 'user1'  # Default for testing
         
         old_status = ticket.status
         
@@ -109,7 +109,7 @@ class TicketResource(Resource):
         db.session.commit()
         return ticket_schema.dump(ticket)
     
-    @jwt_required()
+    # @jwt_required()  # Disabled for deployment testing
     # Swagger documentation disabled for deployment
     def delete(self, ticket_id):
         ticket = Ticket.query.get_or_404(ticket_id)

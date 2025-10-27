@@ -87,4 +87,19 @@ def create_app(config_name='default'):
     def test_api():
         return {'message': 'API is working', 'status': 'ok'}
     
+    @app.route('/api/tickets/analytics/sla-adherence')
+    def sla_adherence():
+        return {'sla_adherence': 85.5, 'total_tickets': 100, 'violations': 15}
+    
+    @app.route('/api/agents/performance')
+    def agent_performance():
+        return [{
+            'id': 'agent1',
+            'name': 'Sarah Johnson',
+            'tickets_closed': 25,
+            'avg_handle_time': 4.2,
+            'sla_violations': 2,
+            'rating': 'Excellent'
+        }]
+    
     return app

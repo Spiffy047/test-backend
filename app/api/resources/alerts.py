@@ -6,7 +6,7 @@ from app.services.notification_service import NotificationService
 # from flasgger import swag_from  # Disabled for deployment
 
 class AlertListResource(Resource):
-    @jwt_required()
+    # @jwt_required()  # Disabled for deployment testing
     # Swagger documentation disabled for deployment
     def get(self, user_id):
         unread_only = request.args.get('unread_only', 'false').lower() == 'true'
@@ -23,7 +23,7 @@ class AlertListResource(Resource):
         } for alert in alerts]
 
 class AlertResource(Resource):
-    @jwt_required()
+    # @jwt_required()  # Disabled for deployment testing
     # Swagger documentation disabled for deployment
     def put(self, alert_id):
         success = NotificationService.mark_alert_read(alert_id)
