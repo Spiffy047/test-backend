@@ -474,12 +474,21 @@ TKT-1003,VPN connection issues,Pending,High,Network & Connectivity,2025-10-27,ag
     # Global ticket storage (in production, use database)
     tickets_store = []
     
-    @app.route('/api/tickets', methods=['GET', 'POST'])
+    # Global counter for new tickets
+    ticket_counter = 5000
+    
+    @app.route('/api/tickets', methods=['GET', 'POST', 'OPTIONS'])
     def tickets():
+        global ticket_counter
+        
+        if request.method == 'OPTIONS':
+            return '', 200
+            
         if request.method == 'POST':
             data = request.get_json()
+            ticket_counter += 1
             new_ticket = {
-                'id': f'TKT-{len(tickets_store) + 1001}',
+                'id': f'TKT-{ticket_counter}',
                 'title': data.get('title'),
                 'description': data.get('description'),
                 'status': 'New',
@@ -490,14 +499,30 @@ TKT-1003,VPN connection issues,Pending,High,Network & Connectivity,2025-10-27,ag
                 'created_at': '2025-01-27T12:00:00Z',
                 'sla_violated': False
             }
-            tickets_store.append(new_ticket)
             return new_ticket, 201
         
-        # GET request
+        # GET request - return sample tickets
         created_by = request.args.get('created_by')
+        sample_tickets = []
+        
+        # Add sample tickets for the user
         if created_by:
-            return [t for t in tickets_store if t.get('created_by') == created_by]
-        return tickets_store
+            sample_tickets = [
+                {
+                    'id': 'TKT-5001',
+                    'title': 'My Test Ticket',
+                    'description': 'Sample ticket for testing',
+                    'status': 'New',
+                    'priority': 'Medium',
+                    'category': 'Hardware',
+                    'created_by': created_by,
+                    'assigned_to': None,
+                    'created_at': '2025-01-27T12:00:00Z',
+                    'sla_violated': False
+                }
+            ]
+        
+        return sample_tickets
     
     @app.route('/api/tickets/<ticket_id>', methods=['PUT', 'OPTIONS'])
     def update_ticket(ticket_id):
