@@ -114,4 +114,46 @@ def create_app(config_name='default'):
             'email': 'mike.c@company.com'
         }]
     
+    @app.route('/api/analytics/ticket-status-counts')
+    def ticket_status_counts():
+        return {'new': 5, 'open': 12, 'pending': 3, 'closed': 25}
+    
+    @app.route('/api/analytics/unassigned-tickets')
+    def unassigned_tickets():
+        return [{'id': 'TKT-1002', 'title': 'Laptop running very slow', 'priority': 'Medium'}]
+    
+    @app.route('/api/analytics/agent-workload')
+    def agent_workload():
+        return [{'agent_id': 'agent1', 'name': 'Sarah Johnson', 'ticket_count': 8}]
+    
+    @app.route('/api/analytics/agent-performance-detailed')
+    def agent_performance_detailed():
+        return [{'id': 'agent1', 'name': 'Sarah Johnson', 'tickets_closed': 25, 'avg_handle_time': 4.2, 'sla_violations': 2, 'rating': 'Excellent'}]
+    
+    @app.route('/api/alerts/<user_id>/count')
+    def alert_count(user_id):
+        return {'count': 0}
+    
+    @app.route('/api/messages/ticket/<ticket_id>/timeline')
+    def ticket_timeline(ticket_id):
+        return []
+    
+    @app.route('/api/tickets/<ticket_id>/activities')
+    def ticket_activities(ticket_id):
+        return []
+    
+    @app.route('/api/files/ticket/<ticket_id>')
+    def ticket_files(ticket_id):
+        return []
+    
+    @app.route('/api/files/upload', methods=['POST'])
+    def upload_file():
+        return {'message': 'Upload not implemented'}, 501
+    
+    @app.route('/api/messages', methods=['POST', 'OPTIONS'])
+    def messages():
+        if request.method == 'OPTIONS':
+            return '', 200
+        return {'message': 'Message sent'}, 201
+    
     return app
