@@ -472,68 +472,7 @@ TKT-1003,VPN connection issues,Pending,High,Network & Connectivity,2025-10-27,ag
         )
     
     # Global ticket storage (in production, use database)
-    tickets_store = [
-        {
-            'id': 'TKT-1001',
-            'title': 'Unable to access company email',
-            'description': 'Getting authentication failed error when trying to log into Outlook',
-            'status': 'Open',
-            'priority': 'High',
-            'category': 'Email & Communication',
-            'created_by': 'user1',
-            'assigned_to': 'agent1',
-            'created_at': '2025-01-27T10:00:00Z',
-            'sla_violated': False
-        },
-        {
-            'id': 'TKT-2001',
-            'title': 'Open Issue #1',
-            'description': 'System performance degradation',
-            'status': 'Open',
-            'priority': 'Critical',
-            'category': 'Hardware',
-            'created_by': 'user2',
-            'assigned_to': 'agent1',
-            'created_at': '2025-01-25T08:00:00Z',
-            'sla_violated': True
-        },
-        {
-            'id': 'TKT-2002',
-            'title': 'Open Issue #2',
-            'description': 'Network connectivity problems',
-            'status': 'Open',
-            'priority': 'High',
-            'category': 'Network',
-            'created_by': 'user3',
-            'assigned_to': 'agent2',
-            'created_at': '2025-01-25T09:00:00Z',
-            'sla_violated': True
-        },
-        {
-            'id': 'TKT-2003',
-            'title': 'Open Issue #3',
-            'description': 'Software installation failure',
-            'status': 'Open',
-            'priority': 'Medium',
-            'category': 'Software',
-            'created_by': 'user1',
-            'assigned_to': 'agent1',
-            'created_at': '2025-01-25T11:00:00Z',
-            'sla_violated': True
-        },
-        {
-            'id': 'TKT-3001',
-            'title': 'Pending Issue #1',
-            'description': 'Waiting for user response',
-            'status': 'Pending',
-            'priority': 'Medium',
-            'category': 'Other',
-            'created_by': 'user2',
-            'assigned_to': 'agent2',
-            'created_at': '2025-01-26T14:00:00Z',
-            'sla_violated': True
-        }
-    ]
+    tickets_store = []
     
     @app.route('/api/tickets', methods=['GET', 'POST'])
     def tickets():
