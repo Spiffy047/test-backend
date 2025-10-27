@@ -136,11 +136,37 @@ def create_app(config_name='default'):
     
     @app.route('/api/messages/ticket/<ticket_id>/timeline')
     def ticket_timeline(ticket_id):
-        return []
+        # Return sample messages for the timeline
+        return [{
+            'id': 'msg1',
+            'ticket_id': ticket_id,
+            'sender_id': 'user1',
+            'sender_name': 'John Smith',
+            'sender_role': 'Normal User',
+            'message': 'I am having trouble accessing my email. The error message says authentication failed.',
+            'timestamp': '2025-10-27T10:30:00Z',
+            'type': 'message'
+        }, {
+            'id': 'msg2',
+            'ticket_id': ticket_id,
+            'sender_id': 'agent1',
+            'sender_name': 'Sarah Johnson',
+            'sender_role': 'Technical User',
+            'message': 'Hi John, I can help you with this. Can you please try resetting your password first?',
+            'timestamp': '2025-10-27T10:45:00Z',
+            'type': 'message'
+        }]
     
     @app.route('/api/tickets/<ticket_id>/activities')
     def ticket_activities(ticket_id):
-        return []
+        return [{
+            'id': 'act1',
+            'ticket_id': ticket_id,
+            'description': 'Ticket assigned to Sarah Johnson',
+            'performed_by': 'system',
+            'performed_by_name': 'System',
+            'created_at': '2025-10-27T10:35:00Z'
+        }]
     
     @app.route('/api/files/ticket/<ticket_id>')
     def ticket_files(ticket_id):
@@ -150,10 +176,26 @@ def create_app(config_name='default'):
     def upload_file():
         return {'message': 'Upload not implemented'}, 501
     
+    # Global message storage (in production, use database)
+    messages_store = []
+    
     @app.route('/api/messages', methods=['POST', 'OPTIONS'])
     def messages():
         if request.method == 'OPTIONS':
             return '', 200
-        return {'message': 'Message sent'}, 201
+        
+        data = request.get_json()
+        new_message = {
+            'id': f'msg_{len(messages_store) + 1}',
+            'ticket_id': data.get('ticket_id'),
+            'sender_id': data.get('sender_id'),
+            'sender_name': data.get('sender_name'),
+            'sender_role': data.get('sender_role'),
+            'message': data.get('message'),
+            'timestamp': '2025-10-27T12:00:00Z',
+            'type': 'message'
+        }
+        messages_store.append(new_message)
+        return new_message, 201
     
     return app
