@@ -36,43 +36,17 @@ def create_app(config_name='default'):
     jwt.init_app(app)
     ma.init_app(app)
     
-    # Initialize Swagger
-    swagger_config = {
-        "headers": [],
-        "specs": [
-            {
-                "endpoint": 'apispec',
-                "route": '/apispec.json',
-                "rule_filter": lambda rule: True,
-                "model_filter": lambda tag: True,
-            }
-        ],
-        "static_url_path": "/flasgger_static",
-        "swagger_ui": True,
-        "specs_route": "/docs/"
-    }
-    
+    # Initialize Swagger with simpler configuration
     swagger_template = {
         "swagger": "2.0",
         "info": {
             "title": "IT ServiceDesk API",
             "description": "RESTful API for IT ServiceDesk Platform",
             "version": "2.0.0"
-        },
-        "securityDefinitions": {
-            "Bearer": {
-                "type": "apiKey",
-                "name": "Authorization",
-                "in": "header",
-                "description": "JWT Authorization header using the Bearer scheme. Example: 'Bearer {token}'"
-            }
-        },
-        "security": [
-            {"Bearer": []}
-        ]
+        }
     }
     
-    swagger.init_app(app, config=swagger_config, template=swagger_template)
+    swagger.init_app(app, template=swagger_template)
     
     # CORS configuration - Allow Netlify frontend
     cors_origins = os.environ.get('CORS_ORIGINS', 'https://hotfixsdm.netlify.app,http://localhost:5173').split(',')
@@ -112,9 +86,6 @@ def create_app(config_name='default'):
     # WebSocket events disabled for now
     # from app.websocket import events
     
-    # Health check endpoint
-    @app.route('/health')
-    def health_check():
-        return {'status': 'healthy', 'version': '2.0.0'}
+    # Health check endpoint moved to app.py
     
     return app

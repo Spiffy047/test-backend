@@ -15,17 +15,13 @@ except Exception as e:
     from flask import Flask
     app = Flask(__name__)
     
-    @app.route('/health')
-    def health():
+    @app.route('/')
+    def index():
         return {'status': 'error', 'message': str(e)}
 
 @app.route('/')
 def index():
-    return {'message': 'IT ServiceDesk API', 'version': '2.0.0'}
-
-@app.route('/health')
-def health():
-    return {'status': 'healthy', 'database': 'connected'}
+    return {'message': 'IT ServiceDesk API', 'version': '2.0.0', 'status': 'healthy'}
 
 def init_db():
     """Initialize database with sample data"""
