@@ -499,8 +499,11 @@ TKT-1003,VPN connection issues,Pending,High,Network & Connectivity,2025-10-27,ag
             return [t for t in tickets_store if t.get('created_by') == created_by]
         return tickets_store
     
-    @app.route('/api/tickets/<ticket_id>', methods=['PUT'])
+    @app.route('/api/tickets/<ticket_id>', methods=['PUT', 'OPTIONS'])
     def update_ticket(ticket_id):
+        if request.method == 'OPTIONS':
+            return '', 200
+            
         data = request.get_json()
         
         # Handle SLA violated tickets specifically
