@@ -7,7 +7,17 @@ from app.models.auth import UserAuth
 import os
 
 config_name = os.getenv('FLASK_ENV', 'development')
-app = create_app(config_name)
+try:
+    app = create_app(config_name)
+except Exception as e:
+    print(f"App creation error: {e}")
+    # Create minimal app for health checks
+    from flask import Flask
+    app = Flask(__name__)
+    
+    @app.route('/health')
+    def health():
+        return {'status': 'error', 'message': str(e)}
 
 @app.route('/')
 def index():
@@ -19,8 +29,12 @@ def health():
 
 def init_db():
     """Initialize database with sample data"""
-    with app.app_context():
-        db.create_all()
+    try:
+        with app.app_context():
+            db.create_all()
+    except Exception as e:
+        print(f"Database initialization error: {e}")
+        return
         
         # Check if data already exists
         if User.query.first():
@@ -96,8 +110,12 @@ def init_db():
             auth.set_password('demo123')
             db.session.add(auth)
         
-        db.session.commit()
-        print("Database initialized with sample data and authentication")
+        try:
+            db.session.commit()
+            print("Database initialized with sample data and authentication")
+        except Exception as e:
+            print(f"Database commit error: {e}")
+            db.session.rollback()
 
 if __name__ == '__main__':
     if os.getenv('INIT_DB', 'false').lower() == 'true':

@@ -24,9 +24,15 @@ def create_app(config_name='default'):
     from config import config
     app.config.from_object(config[config_name])
     
-    # Initialize extensions
-    db.init_app(app)
-    migrate.init_app(app, db)
+    # Initialize extensions with error handling
+    try:
+        db.init_app(app)
+        migrate.init_app(app, db)
+    except Exception as e:
+        print(f"Database initialization error: {e}")
+        # Continue without database for health checks
+        pass
+    
     jwt.init_app(app)
     ma.init_app(app)
     
