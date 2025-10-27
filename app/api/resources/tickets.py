@@ -15,38 +15,9 @@ class TicketListResource(Resource):
     # @jwt_required()  # Disabled for deployment testing
     # Swagger documentation disabled for deployment
     def get(self):
-        """Get paginated list of tickets with optional filters"""
-        page = request.args.get('page', 1, type=int)
-        per_page = min(request.args.get('per_page', 10, type=int), 100)  # Max 100 per page
-        
-        query = Ticket.query
-        
-        # Apply optional filters from query parameters
-        if request.args.get('status'):
-            query = query.filter(Ticket.status == request.args.get('status'))
-        if request.args.get('priority'):
-            query = query.filter(Ticket.priority == request.args.get('priority'))
-        if request.args.get('assigned_to'):
-            query = query.filter(Ticket.assigned_to == request.args.get('assigned_to'))
-        if request.args.get('created_by'):
-            query = query.filter(Ticket.created_by == request.args.get('created_by'))
-        
-        # Paginate results for performance
-        pagination = query.paginate(
-            page=page, per_page=per_page, error_out=False
-        )
-        
-        return {
-            'tickets': tickets_schema.dump(pagination.items),
-            'pagination': {
-                'page': page,
-                'pages': pagination.pages,
-                'per_page': per_page,
-                'total': pagination.total,
-                'has_next': pagination.has_next,
-                'has_prev': pagination.has_prev
-            }
-        }
+        """Get list of tickets"""
+        tickets = Ticket.query.all()
+        return tickets_schema.dump(tickets)
     
     # @jwt_required()  # Disabled for deployment testing
     # Swagger documentation disabled for deployment

@@ -102,4 +102,16 @@ def create_app(config_name='default'):
             'rating': 'Excellent'
         }]
     
+    @app.route('/api/agents')
+    def agents_list():
+        return [{
+            'id': 'agent1',
+            'name': 'Sarah Johnson',
+            'email': 'sarah.j@company.com'
+        }, {
+            'id': 'agent2', 
+            'name': 'Mike Chen',
+            'email': 'mike.c@company.com'
+        }]
+    
     return app
