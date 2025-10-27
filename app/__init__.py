@@ -239,8 +239,10 @@ def create_app(config_name='default'):
             'satisfaction_score': 3.9
         }]
     
-    @app.route('/api/alerts/<user_id>/count')
+    @app.route('/api/alerts/<user_id>/count', methods=['GET', 'OPTIONS'])
     def alert_count(user_id):
+        if request.method == 'OPTIONS':
+            return '', 200
         # Return different counts based on user role
         if user_id in ['user1']:
             return {'count': 2}
@@ -248,7 +250,7 @@ def create_app(config_name='default'):
             return {'count': 3}
         elif user_id in ['user3']:
             return {'count': 5}
-        return {'count': 1}
+        return {'count': 0}
     
     @app.route('/api/messages/ticket/<ticket_id>/timeline')
     def ticket_timeline(ticket_id):
@@ -567,17 +569,19 @@ TKT-1003,VPN connection issues,Pending,High,Network & Connectivity,2025-10-27,ag
         elif request.method == 'DELETE':
             return {'success': True, 'message': 'User deleted'}
     
-    @app.route('/api/alerts/<user_id>')
+    @app.route('/api/alerts/<user_id>', methods=['GET', 'OPTIONS'])
     def user_alerts(user_id):
+        if request.method == 'OPTIONS':
+            return '', 200
         return [
             {
                 'id': 'alert1',
                 'title': 'SLA Violation',
                 'message': 'Ticket TKT-2001 has violated SLA',
-                'type': 'sla_breach',
+                'alert_type': 'sla_violation',
                 'ticket_id': 'TKT-2001',
                 'created_at': '2025-01-27T10:00:00Z',
-                'read': False
+                'is_read': False
             }
         ]
     
