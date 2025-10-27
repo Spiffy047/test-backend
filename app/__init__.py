@@ -77,7 +77,7 @@ def create_app(config_name='default'):
     # Basic API endpoints
     @app.route('/')
     def index():
-        return {'message': 'IT ServiceDesk API', 'version': '2.0.0', 'status': 'healthy'}
+        return {'message': 'Hotfix ServiceDesk API', 'version': '2.0.0', 'status': 'healthy'}
     
     @app.route('/health')
     def health_check():
