@@ -136,8 +136,8 @@ def create_app(config_name='default'):
     
     @app.route('/api/messages/ticket/<ticket_id>/timeline')
     def ticket_timeline(ticket_id):
-        # Return sample messages for the timeline
-        return [{
+        # Sample messages
+        sample_messages = [{
             'id': 'msg1',
             'ticket_id': ticket_id,
             'sender_id': 'user1',
@@ -156,6 +156,12 @@ def create_app(config_name='default'):
             'timestamp': '2025-10-27T10:45:00Z',
             'type': 'message'
         }]
+        
+        # Add any new messages for this ticket
+        if ticket_id in messages_store:
+            sample_messages.extend(messages_store[ticket_id])
+        
+        return sample_messages
     
     @app.route('/api/tickets/<ticket_id>/activities')
     def ticket_activities(ticket_id):
@@ -170,14 +176,30 @@ def create_app(config_name='default'):
     
     @app.route('/api/files/ticket/<ticket_id>')
     def ticket_files(ticket_id):
+        # Return sample attachment for demonstration
+        if ticket_id == 'TKT-1001':
+            return [{
+                'id': 'file1',
+                'filename': 'error_screenshot.png',
+                'file_size_mb': '0.5',
+                'download_url': '/api/files/download/file1',
+                'uploaded_by': 'user1',
+                'uploaded_at': '2025-10-27T10:35:00Z'
+            }]
         return []
     
     @app.route('/api/files/upload', methods=['POST'])
     def upload_file():
-        return {'message': 'Upload not implemented'}, 501
+        # Simulate successful file upload
+        return {
+            'id': 'file_new',
+            'filename': 'uploaded_file.pdf',
+            'file_size_mb': '1.2',
+            'message': 'File uploaded successfully'
+        }, 200
     
-    # Global message storage (in production, use database)
-    messages_store = []
+    # Global message storage per ticket (in production, use database)
+    messages_store = {}
     
     @app.route('/api/messages', methods=['POST', 'OPTIONS'])
     def messages():
@@ -185,17 +207,23 @@ def create_app(config_name='default'):
             return '', 200
         
         data = request.get_json()
+        ticket_id = data.get('ticket_id')
+        
+        if ticket_id not in messages_store:
+            messages_store[ticket_id] = []
+        
+        from datetime import datetime
         new_message = {
-            'id': f'msg_{len(messages_store) + 1}',
-            'ticket_id': data.get('ticket_id'),
+            'id': f'msg_{len(messages_store[ticket_id]) + 100}',
+            'ticket_id': ticket_id,
             'sender_id': data.get('sender_id'),
             'sender_name': data.get('sender_name'),
             'sender_role': data.get('sender_role'),
             'message': data.get('message'),
-            'timestamp': '2025-10-27T12:00:00Z',
+            'timestamp': datetime.utcnow().isoformat() + 'Z',
             'type': 'message'
         }
-        messages_store.append(new_message)
+        messages_store[ticket_id].append(new_message)
         return new_message, 201
     
     return app
