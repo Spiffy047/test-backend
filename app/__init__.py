@@ -79,6 +79,10 @@ def create_app(config_name='default'):
     from app.api import api_bp
     app.register_blueprint(api_bp, url_prefix='/api')
     
+    # Register admin routes
+    from app.routes.admin import admin_bp
+    app.register_blueprint(admin_bp, url_prefix='/api/admin')
+    
     # Legacy routes removed - using Flask-RESTful API only
     
     # WebSocket events disabled for now
