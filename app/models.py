@@ -10,6 +10,9 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(50), nullable=False, default='Normal User')
+    is_verified = db.Column(db.Boolean, default=False)
+    verification_token = db.Column(db.String(100), nullable=True)
+    token_expires_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -21,6 +24,23 @@ class User(db.Model):
     
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+    
+    def generate_verification_token(self):
+        import secrets
+        from datetime import timedelta
+        self.verification_token = secrets.token_urlsafe(32)
+        self.token_expires_at = datetime.utcnow() + timedelta(hours=24)
+        return self.verification_token
+    
+    def verify_email(self, token):
+        if (self.verification_token == token and 
+            self.token_expires_at and 
+            datetime.utcnow() < self.token_expires_at):
+            self.is_verified = True
+            self.verification_token = None
+            self.token_expires_at = None
+            return True
+        return False
 
 class Ticket(db.Model):
     __tablename__ = 'tickets'

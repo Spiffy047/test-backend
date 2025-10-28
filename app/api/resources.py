@@ -17,6 +17,9 @@ class AuthResource(Resource):
             user = User.query.filter_by(email=data['email']).first()
             
             if user and user.check_password(data['password']):
+                if not user.is_verified:
+                    return {'success': False, 'message': 'Please verify your email before logging in'}, 401
+                
                 access_token = create_access_token(identity=user.id)
                 return {
                     'success': True,
@@ -133,16 +136,23 @@ class UserListResource(Resource):
             user = User(
                 name=data['name'],
                 email=data['email'],
-                role=data['role']
+                role=data['role'],
+                is_verified=False
             )
             
             password = data.get('password', 'password123')
             user.set_password(password)
             
+            token = user.generate_verification_token()
+            
             db.session.add(user)
             db.session.commit()
             
-            return user_schema.dump(user), 201
+            # Send verification email
+            email_service = EmailService()
+            email_service.send_verification_email(user.email, token, user.name)
+            
+            return {'message': 'User created. Please check email for verification link.'}, 201
             
         except ValidationError as e:
             return {'error': 'Validation error', 'messages': e.messages}, 400
@@ -228,3 +238,22 @@ class EmailNotificationResource(Resource):
         )
         
         return {'success': success, 'message': 'Email sent' if success else 'Email failed'}
+
+class EmailVerificationResource(Resource):
+    def post(self):
+        data = request.get_json()
+        token = data.get('token')
+        
+        if not token:
+            return {'error': 'Token required'}, 400
+        
+        user = User.query.filter_by(verification_token=token).first()
+        
+        if not user:
+            return {'error': 'Invalid token'}, 400
+        
+        if user.verify_email(token):
+            db.session.commit()
+            return {'message': 'Email verified successfully'}
+        else:
+            return {'error': 'Token expired or invalid'}, 400

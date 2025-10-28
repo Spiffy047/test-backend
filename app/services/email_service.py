@@ -50,3 +50,33 @@ class EmailService:
         except Exception as e:
             print(f"SLA alert email error: {e}")
             return False
+    
+    def send_verification_email(self, to_email, verification_token, user_name):
+        verification_url = f"https://hotfix-frontend.vercel.app/verify-email?token={verification_token}"
+        
+        message = Mail(
+            from_email=self.from_email,
+            to_emails=to_email,
+            subject='Verify Your Email - Hotfix ServiceDesk',
+            html_content=f'''
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #2563eb;">Welcome to Hotfix ServiceDesk!</h2>
+                <p>Hello {user_name},</p>
+                <p>Please verify your email address to complete registration.</p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{verification_url}" 
+                       style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px;">
+                        Verify Email
+                    </a>
+                </div>
+                <p>Link expires in 24 hours.</p>
+            </div>
+            '''
+        )
+        
+        try:
+            response = self.sg.send(message)
+            return True
+        except Exception as e:
+            print(f"Verification email error: {e}")
+            return False
