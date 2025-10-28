@@ -17,14 +17,6 @@ class AuthResource(Resource):
             user = User.query.filter_by(email=data['email']).first()
             
             if user and user.check_password(data['password']):
-                # Check verification status safely (handles missing column)
-                try:
-                    if hasattr(user, 'is_verified') and user.is_verified is False:
-                        return {'success': False, 'message': 'Please verify your email before logging in'}, 401
-                except:
-                    # Column doesn't exist yet, allow login
-                    pass
-                
                 access_token = create_access_token(identity=user.id)
                 return {
                     'success': True,
@@ -147,24 +139,10 @@ class UserListResource(Resource):
             password = data.get('password', 'password123')
             user.set_password(password)
             
-            # Set verification status safely
-            try:
-                user.is_verified = False
-                token = user.generate_verification_token()
-                
-                db.session.add(user)
-                db.session.commit()
-                
-                # Send verification email
-                email_service = EmailService()
-                email_service.send_verification_email(user.email, token, user.name)
-                
-                return {'message': 'User created. Please check email for verification link.'}, 201
-            except:
-                # Verification columns don't exist yet, create user normally
-                db.session.add(user)
-                db.session.commit()
-                return user_schema.dump(user), 201
+            db.session.add(user)
+            db.session.commit()
+            
+            return user_schema.dump(user), 201
             
         except ValidationError as e:
             return {'error': 'Validation error', 'messages': e.messages}, 400
