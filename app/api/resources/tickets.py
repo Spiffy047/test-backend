@@ -15,134 +15,40 @@ class TicketListResource(Resource):
     # @jwt_required()  # Disabled for deployment testing
     # Swagger documentation disabled for deployment
     def get(self):
-        """Get list of tickets matching analytics data"""
-        # Return tickets that match the status counts: new=8, open=15, pending=6, closed=42
-        sample_tickets = []
-        
-        # Add 8 New tickets
-        for i in range(8):
-            sample_tickets.append({
-                'id': f'TKT-100{i+1}',
-                'title': f'New Issue #{i+1}',
-                'description': f'Description for new ticket {i+1}',
-                'status': 'New',
-                'priority': ['Critical', 'High', 'Medium', 'Low'][i % 4],
-                'category': 'Hardware',
-                'assigned_to': None,
-                'created_by': 'user1',
-                'created_at': '2025-10-27T10:00:00Z',
-                'sla_violated': False,
-                'hours_open': 2.5
-            })
-        
-        # Add specific SLA violated tickets first
-        sample_tickets.extend([
-            {
-                'id': 'TKT-2001',
-                'title': 'Open Issue #1',
-                'description': 'System performance degradation',
-                'status': 'Open',
-                'priority': 'Critical',
-                'category': 'Hardware',
-                'assigned_to': 'agent1',
-                'created_by': 'user2',
-                'created_at': '2025-01-25T08:00:00Z',
-                'sla_violated': True,
-                'hours_open': 72.0
-            },
-            {
-                'id': 'TKT-2002',
-                'title': 'Open Issue #2',
-                'description': 'Network connectivity problems',
-                'status': 'Open',
-                'priority': 'High',
-                'category': 'Network',
-                'assigned_to': 'agent2',
-                'created_by': 'user3',
-                'created_at': '2025-01-25T09:00:00Z',
-                'sla_violated': True,
-                'hours_open': 71.0
-            },
-            {
-                'id': 'TKT-2003',
-                'title': 'Open Issue #3',
-                'description': 'Software installation failure',
-                'status': 'Open',
-                'priority': 'Medium',
-                'category': 'Software',
-                'assigned_to': 'agent1',
-                'created_by': 'user1',
-                'created_at': '2025-01-25T11:00:00Z',
-                'sla_violated': True,
-                'hours_open': 69.0
-            }
-        ])
-        
-        # Add remaining 12 Open tickets
-        for i in range(12):
-            sample_tickets.append({
-                'id': f'TKT-200{i+4}',
-                'title': f'Open Issue #{i+4}',
-                'description': f'Description for open ticket {i+4}',
-                'status': 'Open',
-                'priority': ['Critical', 'High', 'Medium', 'Low'][i % 4],
-                'category': 'Software',
-                'assigned_to': f'agent{(i % 4) + 1}',
-                'created_by': 'user1',
-                'created_at': '2025-10-27T09:00:00Z',
-                'sla_violated': False,
-                'hours_open': 5.2
-            })
-        
-        # Add specific SLA violated pending ticket
-        sample_tickets.append({
-            'id': 'TKT-3001',
-            'title': 'Pending Issue #1',
-            'description': 'Waiting for user response',
-            'status': 'Pending',
-            'priority': 'Medium',
-            'category': 'Other',
-            'assigned_to': 'agent2',
-            'created_by': 'user2',
-            'created_at': '2025-01-26T14:00:00Z',
-            'sla_violated': True,
-            'hours_open': 34.0
-        })
-        
-        # Add remaining 5 Pending tickets
-        for i in range(5):
-            sample_tickets.append({
-                'id': f'TKT-300{i+2}',
-                'title': f'Pending Issue #{i+2}',
-                'description': f'Description for pending ticket {i+2}',
-                'status': 'Pending',
-                'priority': ['High', 'Medium'][i % 2],
-                'category': 'Network & Connectivity',
-                'assigned_to': f'agent{(i % 3) + 1}',
-                'created_by': 'user1',
-                'created_at': '2025-10-27T08:00:00Z',
-                'sla_violated': False,
-                'hours_open': 8.1
-            })
-        
-        # Add 42 Closed tickets
-        for i in range(42):
-            sample_tickets.append({
-                'id': f'TKT-400{i+1}',
-                'title': f'Resolved Issue #{i+1}',
-                'description': f'Description for closed ticket {i+1}',
-                'status': 'Closed',
-                'priority': ['Critical', 'High', 'Medium', 'Low'][i % 4],
-                'category': 'Email & Communication',
-                'assigned_to': f'agent{(i % 4) + 1}',
-                'created_by': 'user1',
-                'created_at': '2025-10-26T10:00:00Z',
-                'resolved_at': '2025-10-27T10:00:00Z',
-                'sla_violated': i < 5,  # First 5 had SLA violations
-                'hours_open': 24.0
-            })
-        
-        return sample_tickets
+        """Get tickets from database"""
+        try:
+            from sqlalchemy import text
+            from app import db
+            
+            result = db.session.execute(text("""
+                SELECT id, ticket_id, title, description, priority, category, status, 
+                       created_by, assigned_to, created_at, updated_at, sla_violated
+                FROM tickets 
+                ORDER BY created_at DESC
+            """))
+            
+            tickets = []
+            for row in result:
+                tickets.append({
+                    'id': row[1] or f'TKT-{row[0]}',
+                    'ticket_id': row[1] or f'TKT-{row[0]}',
+                    'title': row[2],
+                    'description': row[3],
+                    'priority': row[4],
+                    'category': row[5],
+                    'status': row[6],
+                    'created_by': row[7],
+                    'assigned_to': row[8],
+                    'created_at': row[9].isoformat() if row[9] else None,
+                    'updated_at': row[10].isoformat() if row[10] else None,
+                    'sla_violated': row[11] or False
+                })
+            
+            return {'tickets': tickets}
+        except Exception as e:
+            print(f"Error fetching tickets: {e}")
+            return {'tickets': []}
+
     
     # @jwt_required()  # Disabled for deployment testing
     # Swagger documentation disabled for deployment
