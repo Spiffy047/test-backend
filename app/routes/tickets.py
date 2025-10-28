@@ -56,9 +56,10 @@ def create_ticket():
     """Create a new ticket"""
     data = request.get_json()
     
-    # Generate ticket ID
-    ticket_count = Ticket.query.count() + 1
-    ticket_id = f"TKT-{ticket_count:04d}"
+    # Generate ticket ID using PostgreSQL sequence
+    result = db.session.execute("SELECT nextval('ticket_id_seq')")
+    ticket_number = result.scalar()
+    ticket_id = f"TKT-{ticket_number:04d}"
     
     ticket = Ticket(
         id=ticket_id,
