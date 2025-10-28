@@ -10,6 +10,11 @@ class Config:
     JWT_ACCESS_TOKEN_EXPIRES = False
     SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY')
     SENDGRID_FROM_EMAIL = os.environ.get('SENDGRID_FROM_EMAIL') or 'mwanikijoe1@gmail.com'
+    
+    # Cloudinary Configuration
+    CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME')
+    CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY')
+    CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET')
 
 class DevelopmentConfig(Config):
     DEBUG = True

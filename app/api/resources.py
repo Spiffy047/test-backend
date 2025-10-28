@@ -273,3 +273,50 @@ class EmailVerificationResource(Resource):
         except:
             return {'error': 'Verification system not available'}, 500
 
+class ImageUploadResource(Resource):
+    def post(self):
+        from flask import request
+        from app.services.cloudinary_service import CloudinaryService
+        
+        if 'image' not in request.files:
+            return {'error': 'No image provided'}, 400
+        
+        file = request.files['image']
+        ticket_id = request.form.get('ticket_id')
+        user_id = request.form.get('user_id')
+        
+        if not file or not ticket_id or not user_id:
+            return {'error': 'Missing required fields'}, 400
+        
+        # Check if file is an image
+        if not file.content_type.startswith('image/'):
+            return {'error': 'File must be an image'}, 400
+        
+        cloudinary_service = CloudinaryService()
+        result = cloudinary_service.upload_image(file, ticket_id, user_id)
+        
+        if result:
+            # Save to database
+            from app.models import db
+            from app import db as database
+            
+            # Update files table with Cloudinary URL
+            try:
+                database.session.execute(
+                    "INSERT INTO files (ticket_id, filename, file_path, file_size, uploaded_by, uploaded_at) VALUES (%s, %s, %s, %s, %s, NOW())",
+                    (ticket_id, file.filename, result['url'], result['bytes'], user_id)
+                )
+                database.session.commit()
+            except:
+                pass
+            
+            return {
+                'success': True,
+                'url': result['url'],
+                'public_id': result['public_id'],
+                'width': result['width'],
+                'height': result['height']
+            }
+        else:
+            return {'error': 'Upload failed'}, 500
+

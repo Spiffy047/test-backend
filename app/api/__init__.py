@@ -14,7 +14,8 @@ from app.api.resources import (
     MessageListResource,
     AnalyticsResource,
     EmailNotificationResource,
-    EmailVerificationResource
+    EmailVerificationResource,
+    ImageUploadResource
 )
 
 # Register API resources
@@ -27,3 +28,4 @@ api.add_resource(MessageListResource, '/messages')
 api.add_resource(AnalyticsResource, '/analytics/<string:endpoint>')
 api.add_resource(EmailNotificationResource, '/notifications/email')
 api.add_resource(EmailVerificationResource, '/auth/verify-email')
+api.add_resource(ImageUploadResource, '/upload/image')
