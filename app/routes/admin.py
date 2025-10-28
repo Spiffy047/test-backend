@@ -1,6 +1,5 @@
 from flask import Blueprint, jsonify
 from app import db
-from app.models.ticket import Ticket
 from sqlalchemy import text
 
 admin_bp = Blueprint('admin', __name__)
@@ -9,24 +8,33 @@ admin_bp = Blueprint('admin', __name__)
 def fix_ticket_numbering():
     """Fix ticket numbering to TKT-XXXX format"""
     try:
-        # Get all tickets ordered by creation date
-        tickets = Ticket.query.order_by(Ticket.created_at).all()
+        # Get all tickets ordered by creation date using raw SQL
+        result = db.session.execute(text("""
+            SELECT id, created_at FROM tickets ORDER BY created_at
+        """))
+        tickets = result.fetchall()
         
-        # Update each ticket with proper TKT-XXXX format
-        for i, ticket in enumerate(tickets, start=1001):
-            new_id = f"TKT-{i:04d}"
-            
-            # Update related tables first
-            db.session.execute(text("""
-                UPDATE ticket_messages SET ticket_id = :new_id WHERE ticket_id = :old_id
-            """), {"new_id": new_id, "old_id": ticket.id})
-            
-            db.session.execute(text("""
-                UPDATE ticket_activities SET ticket_id = :new_id WHERE ticket_id = :old_id
-            """), {"new_id": new_id, "old_id": ticket.id})
-            
-            # Update ticket ID
-            ticket.id = new_id
+        # Update all tickets with proper TKT-XXXX format using SQL
+        db.session.execute(text("""
+            UPDATE tickets 
+            SET id = 'TKT-' || LPAD((ROW_NUMBER() OVER (ORDER BY created_at) + 1000)::text, 4, '0')
+            WHERE id NOT LIKE 'TKT-%'
+        """))
+        
+        # Update related tables
+        db.session.execute(text("""
+            UPDATE ticket_messages 
+            SET ticket_id = t.id
+            FROM tickets t
+            WHERE ticket_messages.ticket_id = t.id
+        """))
+        
+        db.session.execute(text("""
+            UPDATE ticket_activities 
+            SET ticket_id = t.id
+            FROM tickets t
+            WHERE ticket_activities.ticket_id = t.id
+        """))
         
         # Create sequence for future tickets
         next_number = len(tickets) + 1001
