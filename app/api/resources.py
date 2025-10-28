@@ -125,8 +125,7 @@ class UserListResource(Resource):
     
     def post(self):
         try:
-            json_data = request.get_json()
-            data = user_schema.load(json_data)
+            data = user_schema.load(request.get_json())
             
             if User.query.filter_by(email=data['email']).first():
                 return {'error': 'Email already exists'}, 400
@@ -137,7 +136,7 @@ class UserListResource(Resource):
                 role=data['role']
             )
             
-            password = json_data.get('password', 'password123')
+            password = data.get('password', 'password123')
             user.set_password(password)
             
             db.session.add(user)

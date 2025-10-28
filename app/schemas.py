@@ -8,6 +8,7 @@ class UserSchema(Schema):
     role = fields.Str(required=True, validate=validate.OneOf([
         'Normal User', 'Technical User', 'Technical Supervisor', 'System Admin'
     ]))
+    password = fields.Str(load_only=True, validate=validate.Length(min=6))
     created_at = fields.DateTime(dump_only=True)
     
     class Meta:
