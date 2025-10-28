@@ -269,6 +269,63 @@ class EmailVerificationResource(Resource):
         except:
             return {'error': 'Verification system not available'}, 500
 
+class MigrateTicketIDsResource(Resource):
+    def post(self):
+        """Migrate existing tickets to proper TKT-XXXX format"""
+        try:
+            from sqlalchemy import text
+            
+            # Get all tickets that don't have proper TKT-XXXX format
+            tickets = Ticket.query.filter(~Ticket.ticket_id.like('TKT-%')).all()
+            
+            if not tickets:
+                return {'message': 'All tickets already have proper TKT-XXXX format', 'migrated': 0}
+            
+            # Start numbering from 1001
+            ticket_counter = 1001
+            
+            # Check if we already have TKT-XXXX tickets and start from the highest number
+            existing_tkt_tickets = db.session.execute(
+                text("SELECT ticket_id FROM tickets WHERE ticket_id LIKE 'TKT-%' ORDER BY ticket_id DESC LIMIT 1")
+            ).fetchone()
+            
+            if existing_tkt_tickets:
+                try:
+                    last_num = int(existing_tkt_tickets[0].split('-')[1])
+                    ticket_counter = last_num + 1
+                except (ValueError, IndexError):
+                    pass
+            
+            migrated_tickets = []
+            
+            # Update each ticket
+            for ticket in tickets:
+                old_id = ticket.ticket_id
+                new_id = f"TKT-{ticket_counter:04d}"
+                
+                # Make sure this ID doesn't already exist
+                while Ticket.query.filter_by(ticket_id=new_id).first():
+                    ticket_counter += 1
+                    new_id = f"TKT-{ticket_counter:04d}"
+                
+                ticket.ticket_id = new_id
+                migrated_tickets.append({'old_id': old_id, 'new_id': new_id})
+                ticket_counter += 1
+            
+            # Commit all changes
+            db.session.commit()
+            
+            return {
+                'success': True,
+                'message': f'Successfully migrated {len(tickets)} tickets',
+                'migrated': len(tickets),
+                'tickets': migrated_tickets
+            }
+            
+        except Exception as e:
+            db.session.rollback()
+            return {'success': False, 'error': str(e)}, 500
+
 class ImageUploadResource(Resource):
     def post(self):
         from flask import request

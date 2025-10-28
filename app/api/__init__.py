@@ -15,7 +15,8 @@ from app.api.resources import (
     AnalyticsResource,
     EmailNotificationResource,
     EmailVerificationResource,
-    ImageUploadResource
+    ImageUploadResource,
+    MigrateTicketIDsResource
 )
 
 # Register API resources
@@ -29,3 +30,4 @@ api.add_resource(AnalyticsResource, '/analytics/<string:endpoint>')
 api.add_resource(EmailNotificationResource, '/notifications/email')
 api.add_resource(EmailVerificationResource, '/auth/verify-email')
 api.add_resource(ImageUploadResource, '/upload/image')
+api.add_resource(MigrateTicketIDsResource, '/admin/migrate-ticket-ids')
