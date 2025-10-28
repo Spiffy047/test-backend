@@ -17,8 +17,9 @@ class AuthResource(Resource):
             user = User.query.filter_by(email=data['email']).first()
             
             if user and user.check_password(data['password']):
-                if not user.is_verified:
-                    return {'success': False, 'message': 'Please verify your email before logging in'}, 401
+                # Temporarily allow login without verification for existing users
+                # if hasattr(user, 'is_verified') and not user.is_verified:
+                #     return {'success': False, 'message': 'Please verify your email before logging in'}, 401
                 
                 access_token = create_access_token(identity=user.id)
                 return {
