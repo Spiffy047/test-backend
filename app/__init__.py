@@ -83,6 +83,10 @@ def create_app(config_name='default'):
     from app.routes.admin import admin_bp
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
     
+    # Register recreate tickets route
+    from app.routes.recreate_tickets import recreate_tickets_bp
+    app.register_blueprint(recreate_tickets_bp)
+    
     # Legacy routes removed - using Flask-RESTful API only
     
     # WebSocket events disabled for now
