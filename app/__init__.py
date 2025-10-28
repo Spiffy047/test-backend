@@ -35,24 +35,35 @@ def create_app(config_name='default'):
                 from app.models import Ticket
                 from sqlalchemy import text
                 
-                # Check if migration is needed
-                result = db.session.execute(text("SELECT COUNT(*) FROM tickets WHERE ticket_id NOT LIKE 'TKT-%'")).fetchone()
-                non_tkt_count = result[0] if result else 0
+                # Force recreate tickets with proper format on startup
+                print("Recreating tickets with proper TKT-XXXX format...")
                 
-                if non_tkt_count > 0:
-                    print(f"Migrating {non_tkt_count} tickets to TKT-XXXX format...")
-                    
-                    # Direct SQL update
+                # Delete all existing tickets
+                db.session.execute(text("DELETE FROM tickets"))
+                
+                # Reset sequence
+                db.session.execute(text("ALTER SEQUENCE tickets_id_seq RESTART WITH 1001"))
+                
+                # Create sample tickets
+                sample_tickets = [
+                    ('TKT-1001', 'Password Reset Request', 'Unable to access email account, need password reset', 'Medium', 'Account Access', 'Open', 1, 2),
+                    ('TKT-1002', 'Software Installation Issue', 'Microsoft Office installation failing on Windows 10', 'High', 'Software', 'In Progress', 1, 2),
+                    ('TKT-1003', 'Network Connectivity Problem', 'Cannot connect to company VPN from home', 'High', 'Network', 'Open', 1, 3),
+                    ('TKT-1004', 'Printer Not Working', 'Office printer showing error message', 'Low', 'Hardware', 'Resolved', 1, 2),
+                    ('TKT-1005', 'Email Sync Issues', 'Outlook not syncing with mobile device', 'Medium', 'Email', 'Pending', 1, 3)
+                ]
+                
+                for ticket_num, title, desc, priority, category, status, user_id, assigned_to in sample_tickets:
                     db.session.execute(text("""
-                        UPDATE tickets 
-                        SET ticket_id = 'TKT-' || LPAD((id + 1000)::text, 4, '0')
-                        WHERE ticket_id NOT LIKE 'TKT-%'
-                    """))
-                    
-                    db.session.commit()
-                    print(f"Successfully migrated {non_tkt_count} tickets to TKT-XXXX format!")
-                else:
-                    print("All tickets already have proper TKT-XXXX format")
+                        INSERT INTO tickets (ticket_number, title, description, priority, category, status, user_id, assigned_to, created_at, updated_at)
+                        VALUES (:ticket_num, :title, :desc, :priority, :category, :status, :user_id, :assigned_to, NOW(), NOW())
+                    """), {
+                        'ticket_num': ticket_num, 'title': title, 'desc': desc, 'priority': priority,
+                        'category': category, 'status': status, 'user_id': user_id, 'assigned_to': assigned_to
+                    })
+                
+                db.session.commit()
+                print(f"Successfully recreated {len(sample_tickets)} tickets with proper TKT-XXXX format!")
                     
             except Exception as e:
                 print(f"Migration error: {e}")
