@@ -32,12 +32,27 @@ class AuthResource(Resource):
 
 class TicketListResource(Resource):
     def get(self):
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
         created_by = request.args.get('created_by')
+        
+        query = Ticket.query
         if created_by:
-            tickets = Ticket.query.filter_by(created_by=created_by).all()
-        else:
-            tickets = Ticket.query.all()
-        return tickets_schema.dump(tickets)
+            query = query.filter_by(created_by=created_by)
+        
+        paginated = query.paginate(page=page, per_page=per_page, error_out=False)
+        
+        return {
+            'tickets': tickets_schema.dump(paginated.items),
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': paginated.total,
+                'pages': paginated.pages,
+                'has_next': paginated.has_next,
+                'has_prev': paginated.has_prev
+            }
+        }
     
     def post(self):
         try:
@@ -76,8 +91,22 @@ class TicketResource(Resource):
 
 class UserListResource(Resource):
     def get(self):
-        users = User.query.all()
-        return users_schema.dump(users)
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
+        
+        paginated = User.query.paginate(page=page, per_page=per_page, error_out=False)
+        
+        return {
+            'users': users_schema.dump(paginated.items),
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': paginated.total,
+                'pages': paginated.pages,
+                'has_next': paginated.has_next,
+                'has_prev': paginated.has_prev
+            }
+        }
     
     def post(self):
         try:
