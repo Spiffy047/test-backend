@@ -125,7 +125,8 @@ class UserListResource(Resource):
     
     def post(self):
         try:
-            data = user_schema.load(request.get_json())
+            json_data = request.get_json()
+            data = user_schema.load(json_data)
             
             if User.query.filter_by(email=data['email']).first():
                 return {'error': 'Email already exists'}, 400
@@ -135,7 +136,9 @@ class UserListResource(Resource):
                 email=data['email'],
                 role=data['role']
             )
-            user.set_password('password123')
+            
+            password = json_data.get('password', 'password123')
+            user.set_password(password)
             
             db.session.add(user)
             db.session.commit()
@@ -147,10 +150,33 @@ class UserListResource(Resource):
 
 class UserResource(Resource):
     def put(self, user_id):
-        return {'success': True, 'message': 'User updated'}
+        try:
+            data = user_schema.load(request.get_json())
+            user = User.query.get_or_404(user_id)
+            
+            # Check if email is already taken by another user
+            existing_user = User.query.filter_by(email=data['email']).first()
+            if existing_user and existing_user.id != user.id:
+                return {'error': 'Email already exists'}, 400
+            
+            user.name = data['name']
+            user.email = data['email']
+            user.role = data['role']
+            
+            db.session.commit()
+            return user_schema.dump(user)
+            
+        except ValidationError as e:
+            return {'error': 'Validation error', 'messages': e.messages}, 400
     
     def delete(self, user_id):
-        return {'success': True, 'message': 'User deleted'}
+        try:
+            user = User.query.get_or_404(user_id)
+            db.session.delete(user)
+            db.session.commit()
+            return {'success': True, 'message': 'User deleted'}
+        except Exception as e:
+            return {'error': str(e)}, 500
 
 class MessageListResource(Resource):
     def post(self):

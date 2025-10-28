@@ -15,7 +15,7 @@ def init_database():
                 {'name': 'John Smith', 'email': 'john.smith@company.com', 'role': 'Normal User'},
                 {'name': 'Maria Garcia', 'email': 'maria.garcia@company.com', 'role': 'Technical User'},
                 {'name': 'Robert Chen', 'email': 'robert.chen@company.com', 'role': 'Technical Supervisor'},
-                {'name': 'Admin User', 'email': 'admin@company.com', 'role': 'System Admin'},
+                {'name': 'Admin User', 'email': 'mwanikijoe1@gmail.com', 'role': 'System Admin'},
             ]
             
             for user_data in users_data:
