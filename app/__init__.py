@@ -46,30 +46,9 @@ def create_app(config_name='default'):
     
     # Register Flask-RESTful API
     from app.api import api_bp
-    app.register_blueprint(api_bp)
+    app.register_blueprint(api_bp, url_prefix='/api')
     
-    # Register existing blueprints for backward compatibility
-    from app.routes.tickets import tickets_bp
-    from app.routes.users import users_bp
-    from app.routes.agents import agents_bp
-    from app.routes.messages import messages_bp
-    from app.routes.analytics import analytics_bp
-    from app.routes.auth import auth_bp
-    from app.routes.export import export_bp
-    from app.routes.sla import sla_bp
-    from app.routes.files import files_bp
-    from app.routes.alerts import alerts_bp
-    
-    app.register_blueprint(tickets_bp, url_prefix='/api/v1/tickets')
-    app.register_blueprint(users_bp, url_prefix='/api/v1/users')
-    app.register_blueprint(agents_bp, url_prefix='/api/v1/agents')
-    app.register_blueprint(messages_bp, url_prefix='/api/v1/messages')
-    app.register_blueprint(analytics_bp, url_prefix='/api/v1/analytics')
-    app.register_blueprint(auth_bp, url_prefix='/api/v1/auth')
-    app.register_blueprint(export_bp, url_prefix='/api/v1/export')
-    app.register_blueprint(sla_bp, url_prefix='/api/v1/sla')
-    app.register_blueprint(files_bp, url_prefix='/api/v1/files')
-    app.register_blueprint(alerts_bp, url_prefix='/api/v1/alerts')
+    # Legacy routes removed - using Flask-RESTful API only
     
     # WebSocket events disabled for now
     # from app.websocket import events
@@ -87,37 +66,7 @@ def create_app(config_name='default'):
     def test_api():
         return {'message': 'API is working', 'status': 'ok'}
     
-    @app.route('/api/auth/login', methods=['POST', 'OPTIONS'])
-    def auth_login():
-        if request.method == 'OPTIONS':
-            return '', 200
-        
-        try:
-            from app.schemas import login_schema, user_schema
-            from app.models import User
-            
-            # Validate input
-            data = login_schema.load(request.get_json())
-            
-            # Find user by email
-            user = User.query.filter_by(email=data['email']).first()
-            
-            if user and user.check_password(data['password']):
-                # Create JWT token
-                access_token = create_access_token(identity=user.id)
-                
-                return {
-                    'success': True,
-                    'user': user_schema.dump(user),
-                    'access_token': access_token
-                }
-            else:
-                return {'success': False, 'message': 'Invalid credentials'}, 401
-                
-        except ValidationError as e:
-            return {'success': False, 'message': 'Validation error', 'errors': e.messages}, 400
-        except Exception as e:
-            return {'success': False, 'message': str(e)}, 500
+    # Auth endpoint moved to Flask-RESTful resources
     
     @app.route('/api/tickets/analytics/sla-adherence')
     def sla_adherence():
@@ -402,30 +351,7 @@ def create_app(config_name='default'):
     # Global message storage per ticket (in production, use database)
     messages_store = {}
     
-    @app.route('/api/messages', methods=['POST', 'OPTIONS'])
-    def messages():
-        if request.method == 'OPTIONS':
-            return '', 200
-        
-        data = request.get_json()
-        ticket_id = data.get('ticket_id')
-        
-        if ticket_id not in messages_store:
-            messages_store[ticket_id] = []
-        
-        from datetime import datetime
-        new_message = {
-            'id': f'msg_{len(messages_store[ticket_id]) + 100}',
-            'ticket_id': ticket_id,
-            'sender_id': data.get('sender_id'),
-            'sender_name': data.get('sender_name'),
-            'sender_role': data.get('sender_role'),
-            'message': data.get('message'),
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
-            'type': 'message'
-        }
-        messages_store[ticket_id].append(new_message)
-        return new_message, 201
+    # Messages endpoint moved to Flask-RESTful resources
     
     @app.route('/api/alerts/<alert_id>/read', methods=['PUT'])
     def mark_alert_read(alert_id):
@@ -511,113 +437,13 @@ TKT-1003,VPN connection issues,Pending,High,Network & Connectivity,2025-10-27,ag
     # Global counter for new tickets
     ticket_counter = 5000
     
-    @app.route('/api/tickets', methods=['GET', 'POST', 'OPTIONS'])
-    def tickets():
-        if request.method == 'OPTIONS':
-            return '', 200
-            
-        from app.schemas import tickets_schema, ticket_schema
-        from app.models import Ticket
-        
-        if request.method == 'GET':
-            created_by = request.args.get('created_by')
-            if created_by:
-                tickets = Ticket.query.filter_by(created_by=created_by).all()
-            else:
-                tickets = Ticket.query.all()
-            return tickets_schema.dump(tickets)
-            
-        elif request.method == 'POST':
-            try:
-                data = ticket_schema.load(request.get_json())
-                
-                # Generate ticket ID
-                last_ticket = Ticket.query.order_by(Ticket.id.desc()).first()
-                ticket_num = (last_ticket.id + 1) if last_ticket else 1001
-                
-                ticket = Ticket(
-                    ticket_id=f'TKT-{ticket_num}',
-                    title=data['title'],
-                    description=data['description'],
-                    priority=data['priority'],
-                    category=data['category'],
-                    created_by=data['created_by']
-                )
-                
-                db.session.add(ticket)
-                db.session.commit()
-                
-                return ticket_schema.dump(ticket), 201
-                
-            except ValidationError as e:
-                return {'error': 'Validation error', 'messages': e.messages}, 400
+    # Tickets endpoint moved to Flask-RESTful resources
     
-    @app.route('/api/tickets/<ticket_id>', methods=['PUT', 'OPTIONS'])
-    def update_ticket(ticket_id):
-        if request.method == 'OPTIONS':
-            return '', 200
-            
-        data = request.get_json()
-        
-        # Handle SLA violated tickets specifically
-        if ticket_id in ['TKT-2001', 'TKT-2002', 'TKT-2003', 'TKT-3001']:
-            return {
-                'id': ticket_id,
-                'status': data.get('status', 'Open'),
-                'assigned_to': data.get('assigned_to'),
-                'message': 'Ticket updated successfully',
-                'success': True
-            }
-        
-        # Handle other tickets
-        return {
-            'id': ticket_id,
-            'status': data.get('status', 'Open'),
-            'message': 'Ticket updated successfully',
-            'success': True
-        }
+    # Ticket update endpoint moved to Flask-RESTful resources
     
-    @app.route('/api/users', methods=['GET', 'POST', 'OPTIONS'])
-    def users():
-        if request.method == 'OPTIONS':
-            return '', 200
-            
-        from app.schemas import users_schema, user_schema
-        from app.models import User
-        
-        if request.method == 'GET':
-            users = User.query.all()
-            return users_schema.dump(users)
-            
-        elif request.method == 'POST':
-            try:
-                data = user_schema.load(request.get_json())
-                
-                # Check if email already exists
-                if User.query.filter_by(email=data['email']).first():
-                    return {'error': 'Email already exists'}, 400
-                
-                user = User(
-                    name=data['name'],
-                    email=data['email'],
-                    role=data['role']
-                )
-                user.set_password('password123')  # Default password
-                
-                db.session.add(user)
-                db.session.commit()
-                
-                return user_schema.dump(user), 201
-                
-            except ValidationError as e:
-                return {'error': 'Validation error', 'messages': e.messages}, 400
+    # Users endpoint moved to Flask-RESTful resources
     
-    @app.route('/api/users/<user_id>', methods=['PUT', 'DELETE'])
-    def user_detail(user_id):
-        if request.method == 'PUT':
-            return {'success': True, 'message': 'User updated'}
-        elif request.method == 'DELETE':
-            return {'success': True, 'message': 'User deleted'}
+    # User detail endpoint moved to Flask-RESTful resources
     
     @app.route('/api/alerts/<user_id>', methods=['GET', 'OPTIONS'])
     def user_alerts(user_id):
