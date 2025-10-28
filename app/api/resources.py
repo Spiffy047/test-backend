@@ -65,11 +65,23 @@ class TicketListResource(Resource):
         try:
             data = ticket_schema.load(request.get_json())
             
-            last_ticket = Ticket.query.order_by(Ticket.id.desc()).first()
-            ticket_num = (last_ticket.id + 1) if last_ticket else 1001
+            # Get the highest ticket number from existing ticket_ids
+            last_ticket = Ticket.query.filter(Ticket.ticket_id.like('TKT-%')).order_by(Ticket.ticket_id.desc()).first()
+            if last_ticket and last_ticket.ticket_id:
+                try:
+                    last_num = int(last_ticket.ticket_id.split('-')[1])
+                    ticket_num = last_num + 1
+                except (ValueError, IndexError):
+                    ticket_num = 1001
+            else:
+                ticket_num = 1001
+            
+            # Ensure we don't have duplicates
+            while Ticket.query.filter_by(ticket_id=f'TKT-{ticket_num}').first():
+                ticket_num += 1
             
             ticket = Ticket(
-                ticket_id=f'TKT-{ticket_num}',
+                ticket_id=f'TKT-{ticket_num:04d}',
                 title=data['title'],
                 description=data['description'],
                 priority=data['priority'],
