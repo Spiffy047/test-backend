@@ -32,16 +32,12 @@ class AuthResource(Resource):
 
 class TicketListResource(Resource):
     def get(self):
-        try:
-            created_by = request.args.get('created_by')
-            if created_by:
-                tickets = Ticket.query.filter_by(created_by=created_by).all()
-            else:
-                tickets = Ticket.query.all()
-            return tickets_schema.dump(tickets)
-        except Exception as e:
-            # Return mock data if database not available
-            return [{'id': 'TKT-1001', 'title': 'Sample Ticket', 'status': 'Open'}]
+        created_by = request.args.get('created_by')
+        if created_by:
+            tickets = Ticket.query.filter_by(created_by=created_by).all()
+        else:
+            tickets = Ticket.query.all()
+        return tickets_schema.dump(tickets)
     
     def post(self):
         try:
@@ -80,12 +76,8 @@ class TicketResource(Resource):
 
 class UserListResource(Resource):
     def get(self):
-        try:
-            users = User.query.all()
-            return users_schema.dump(users)
-        except Exception as e:
-            # Return mock data if database not available
-            return [{'id': 1, 'name': 'Test User', 'email': 'test@example.com', 'role': 'Normal User'}]
+        users = User.query.all()
+        return users_schema.dump(users)
     
     def post(self):
         try:

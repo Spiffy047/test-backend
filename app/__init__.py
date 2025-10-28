@@ -23,10 +23,19 @@ def create_app(config_name='default'):
     from config import config
     app.config.from_object(config[config_name])
     
+    # Ensure DATABASE_URL is properly set
+    if not app.config.get('SQLALCHEMY_DATABASE_URI'):
+        db_url = os.environ.get('DATABASE_URL')
+        if db_url:
+            app.config['SQLALCHEMY_DATABASE_URI'] = db_url
+        else:
+            app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://hotfix_user:UlNqxVgaEpb5aDMUKRQ97fZkwPn7LsSB@dpg-d3vie4ndiees73f0rtc0-a.oregon-postgres.render.com/hotfix'
+    
     # Initialize extensions with error handling
     try:
         db.init_app(app)
         migrate.init_app(app, db)
+        print(f"Database configured: {app.config.get('SQLALCHEMY_DATABASE_URI', 'Not set')[:50]}...")
     except Exception as e:
         print(f"Database initialization error: {e}")
         # Continue without database for health checks
