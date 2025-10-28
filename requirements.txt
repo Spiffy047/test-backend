@@ -8,5 +8,6 @@ Flask-Marshmallow==0.15.0
 marshmallow==3.20.1
 marshmallow-sqlalchemy==0.29.0
 python-dotenv==1.0.0
-psycopg2-binary==2.9.7
+psycopg2==2.9.9
 Werkzeug==3.0.1
+gunicorn==21.2.0

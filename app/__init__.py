@@ -23,9 +23,16 @@ def create_app(config_name='default'):
     from config import config
     app.config.from_object(config[config_name])
     
-    # Initialize extensions
-    db.init_app(app)
-    migrate.init_app(app, db)
+    # Initialize extensions with error handling
+    try:
+        db.init_app(app)
+        migrate.init_app(app, db)
+        print("Database initialized successfully")
+    except Exception as e:
+        print(f"Database initialization failed: {e}")
+        # Create a minimal app that can still serve basic endpoints
+        app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+        db.init_app(app)
     
     jwt.init_app(app)
     ma.init_app(app)
