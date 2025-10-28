@@ -55,7 +55,7 @@ def create_app(config_name='default'):
                 
                 for ticket_num, title, desc, priority, category, status, user_id, assigned_to in sample_tickets:
                     db.session.execute(text("""
-                        INSERT INTO tickets (ticket_number, title, description, priority, category, status, user_id, assigned_to, created_at, updated_at)
+                        INSERT INTO tickets (ticket_id, title, description, priority, category, status, created_by, assigned_to, created_at, updated_at)
                         VALUES (:ticket_num, :title, :desc, :priority, :category, :status, :user_id, :assigned_to, NOW(), NOW())
                     """), {
                         'ticket_num': ticket_num, 'title': title, 'desc': desc, 'priority': priority,
