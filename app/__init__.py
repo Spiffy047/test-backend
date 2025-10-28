@@ -403,11 +403,16 @@ def create_app(config_name='default'):
             
             result = db.session.execute(text("""
                 SELECT 
+                    id,
                     ticket_id,
                     title,
                     status,
                     priority,
+                    category,
+                    created_by,
+                    assigned_to,
                     created_at,
+                    sla_violated,
                     EXTRACT(EPOCH FROM (NOW() - created_at))/3600 as hours_old
                 FROM tickets 
                 WHERE status != 'Closed'
@@ -427,11 +432,16 @@ def create_app(config_name='default'):
             for row in result:
                 ticket = {
                     'id': row[0],
-                    'title': row[1],
-                    'status': row[2],
-                    'priority': row[3],
-                    'created_at': row[4].isoformat() if row[4] else None,
-                    'hours_old': float(row[5]) if row[5] else 0
+                    'ticket_id': row[1],
+                    'title': row[2],
+                    'status': row[3],
+                    'priority': row[4],
+                    'category': row[5],
+                    'created_by': row[6],
+                    'assigned_to': row[7],
+                    'created_at': row[8].isoformat() if row[8] else None,
+                    'sla_violated': row[9],
+                    'hours_old': float(row[10]) if row[10] else 0
                 }
                 
                 hours_old = ticket['hours_old']
@@ -476,19 +486,45 @@ def create_app(config_name='default'):
     
     @app.route('/api/analytics/sla-violations')
     def sla_violations():
-        return [{
-            'ticket_id': 'TKT-1001',
-            'title': 'Email access issue',
-            'priority': 'High',
-            'hours_overdue': 2.5,
-            'assigned_to': 'agent1'
-        }, {
-            'ticket_id': 'TKT-1003',
-            'title': 'VPN connection problems',
-            'priority': 'High', 
-            'hours_overdue': 1.2,
-            'assigned_to': 'agent2'
-        }]
+        try:
+            from sqlalchemy import text
+            
+            result = db.session.execute(text("""
+                SELECT 
+                    id,
+                    ticket_id,
+                    title,
+                    priority,
+                    category,
+                    status,
+                    created_by,
+                    assigned_to,
+                    created_at,
+                    EXTRACT(EPOCH FROM (NOW() - created_at))/3600 as hours_old
+                FROM tickets 
+                WHERE sla_violated = true AND status != 'Closed'
+                ORDER BY created_at ASC
+            """))
+            
+            violations = []
+            for row in result:
+                violations.append({
+                    'id': row[0],
+                    'ticket_id': row[1],
+                    'title': row[2],
+                    'priority': row[3],
+                    'category': row[4],
+                    'status': row[5],
+                    'created_by': row[6],
+                    'assigned_to': row[7],
+                    'created_at': row[8].isoformat() if row[8] else None,
+                    'hours_overdue': round(float(row[9]), 1) if row[9] else 0
+                })
+            
+            return violations
+        except Exception as e:
+            print(f"Error fetching SLA violations: {e}")
+            return []
     
     @app.route('/api/export/tickets/excel')
     def export_tickets():
