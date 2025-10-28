@@ -36,10 +36,16 @@ class TicketListResource(Resource):
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 10, type=int)
         created_by = request.args.get('created_by')
+        status = request.args.get('status')
         
         query = Ticket.query
         if created_by:
             query = query.filter_by(created_by=created_by)
+        if status:
+            query = query.filter_by(status=status)
+        
+        # Order by most recent first
+        query = query.order_by(Ticket.created_at.desc())
         
         paginated = query.paginate(page=page, per_page=per_page, error_out=False)
         

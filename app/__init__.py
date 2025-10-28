@@ -109,26 +109,58 @@ def create_app(config_name='default'):
     
     @app.route('/api/analytics/ticket-status-counts')
     def ticket_status_counts():
-        return {
-            'new': 8,
-            'open': 15, 
-            'pending': 6,
-            'closed': 42
-        }
+        try:
+            from sqlalchemy import text
+            result = db.session.execute(text("""
+                SELECT status, COUNT(*) as count 
+                FROM tickets 
+                GROUP BY status
+            """))
+            
+            counts = {'new': 0, 'open': 0, 'pending': 0, 'closed': 0}
+            for row in result:
+                status_key = row[0].lower().replace(' ', '_')
+                counts[status_key] = row[1]
+            
+            return counts
+        except Exception as e:
+            print(f"Error fetching ticket counts: {e}")
+            return {'new': 0, 'open': 0, 'pending': 0, 'closed': 0}
     
     @app.route('/api/analytics/unassigned-tickets')
     def unassigned_tickets():
-        # Return the New tickets (which are unassigned)
-        return {
-            'tickets': [{
-                'id': f'TKT-100{i+1}',
-                'title': f'New Issue #{i+1}',
-                'priority': ['Critical', 'High', 'Medium', 'Low'][i % 4],
-                'category': 'Hardware',
-                'created_at': '2025-10-27T10:00:00Z',
-                'hours_open': 2.5
-            } for i in range(8)]
-        }
+        try:
+            from sqlalchemy import text
+            
+            result = db.session.execute(text("""
+                SELECT 
+                    ticket_id,
+                    title,
+                    priority,
+                    category,
+                    created_at,
+                    EXTRACT(EPOCH FROM (NOW() - created_at))/3600 as hours_open
+                FROM tickets 
+                WHERE assigned_to IS NULL AND status != 'Closed'
+                ORDER BY created_at DESC
+                LIMIT 20
+            """))
+            
+            tickets = []
+            for row in result:
+                tickets.append({
+                    'id': row[0],
+                    'title': row[1],
+                    'priority': row[2],
+                    'category': row[3],
+                    'created_at': row[4].isoformat() if row[4] else None,
+                    'hours_open': round(float(row[5]), 1) if row[5] else 0
+                })
+            
+            return {'tickets': tickets}
+        except Exception as e:
+            print(f"Error fetching unassigned tickets: {e}")
+            return {'tickets': []}
     
     @app.route('/api/analytics/agent-workload')
     def agent_workload():
@@ -365,21 +397,46 @@ def create_app(config_name='default'):
     
     @app.route('/api/analytics/ticket-aging')
     def ticket_aging():
-        from datetime import datetime, timedelta
-        now = datetime.utcnow()
-        
-        aging_buckets = {
-            '0-24h': [],
-            '24-48h': [],
-            '48-72h': [],
-            '72h+': []
-        }
-        
-        # Categorize open tickets by age
-        for ticket in tickets_store:
-            if ticket['status'] != 'Closed':
-                created = datetime.fromisoformat(ticket['created_at'].replace('Z', '+00:00'))
-                hours_old = (now - created).total_seconds() / 3600
+        try:
+            from sqlalchemy import text
+            from datetime import datetime
+            
+            result = db.session.execute(text("""
+                SELECT 
+                    ticket_id,
+                    title,
+                    status,
+                    priority,
+                    created_at,
+                    EXTRACT(EPOCH FROM (NOW() - created_at))/3600 as hours_old
+                FROM tickets 
+                WHERE status != 'Closed'
+                ORDER BY created_at DESC
+            """))
+            
+            aging_buckets = {
+                '0-24h': [],
+                '24-48h': [],
+                '48-72h': [],
+                '72h+': []
+            }
+            
+            total_hours = 0
+            ticket_count = 0
+            
+            for row in result:
+                ticket = {
+                    'id': row[0],
+                    'title': row[1],
+                    'status': row[2],
+                    'priority': row[3],
+                    'created_at': row[4].isoformat() if row[4] else None,
+                    'hours_old': float(row[5]) if row[5] else 0
+                }
+                
+                hours_old = ticket['hours_old']
+                total_hours += hours_old
+                ticket_count += 1
                 
                 if hours_old <= 24:
                     aging_buckets['0-24h'].append(ticket)
@@ -389,18 +446,33 @@ def create_app(config_name='default'):
                     aging_buckets['48-72h'].append(ticket)
                 else:
                     aging_buckets['72h+'].append(ticket)
-        
-        return {
-            'aging_data': [
-                {'age_range': '0-24h', 'count': len(aging_buckets['0-24h'])},
-                {'age_range': '24-48h', 'count': len(aging_buckets['24-48h'])},
-                {'age_range': '48-72h', 'count': len(aging_buckets['48-72h'])},
-                {'age_range': '72h+', 'count': len(aging_buckets['72h+'])}
-            ],
-            'buckets': aging_buckets,
-            'total_open_tickets': sum(len(bucket) for bucket in aging_buckets.values()),
-            'average_age_hours': 48.5
-        }
+            
+            avg_age = (total_hours / ticket_count) if ticket_count > 0 else 0
+            
+            return {
+                'aging_data': [
+                    {'age_range': '0-24h', 'count': len(aging_buckets['0-24h'])},
+                    {'age_range': '24-48h', 'count': len(aging_buckets['24-48h'])},
+                    {'age_range': '48-72h', 'count': len(aging_buckets['48-72h'])},
+                    {'age_range': '72h+', 'count': len(aging_buckets['72h+'])}
+                ],
+                'buckets': aging_buckets,
+                'total_open_tickets': ticket_count,
+                'average_age_hours': round(avg_age, 1)
+            }
+        except Exception as e:
+            print(f"Error fetching aging data: {e}")
+            return {
+                'aging_data': [
+                    {'age_range': '0-24h', 'count': 0},
+                    {'age_range': '24-48h', 'count': 0},
+                    {'age_range': '48-72h', 'count': 0},
+                    {'age_range': '72h+', 'count': 0}
+                ],
+                'buckets': {'0-24h': [], '24-48h': [], '48-72h': [], '72h+': []},
+                'total_open_tickets': 0,
+                'average_age_hours': 0
+            }
     
     @app.route('/api/analytics/sla-violations')
     def sla_violations():
