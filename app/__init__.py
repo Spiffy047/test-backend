@@ -1,10 +1,10 @@
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from flask_marshmallow import Marshmallow
-# from flasgger import Swagger  # Disabled for deployment
+from marshmallow import ValidationError
 from dotenv import load_dotenv
 import os
 
@@ -15,7 +15,6 @@ db = SQLAlchemy()
 migrate = Migrate()
 jwt = JWTManager()
 ma = Marshmallow()
-# swagger = Swagger()  # Disabled for deployment
 
 def create_app(config_name='default'):
     app = Flask(__name__)
@@ -94,27 +93,29 @@ def create_app(config_name='default'):
             return '', 200
         
         try:
-            data = request.get_json() or {}
-            email = data.get('email', '')
+            from app.schemas import login_schema, user_schema
+            from app.models import User
             
-            # Simple auth without database
-            users = {
-                'john.smith@company.com': {'id': 'user1', 'name': 'John Smith', 'role': 'Normal User'},
-                'maria.garcia@company.com': {'id': 'user2', 'name': 'Maria Garcia', 'role': 'Technical User'},
-                'robert.chen@company.com': {'id': 'user3', 'name': 'Robert Chen', 'role': 'Technical Supervisor'},
-                'admin@company.com': {'id': 'user4', 'name': 'Admin User', 'role': 'System Admin'}
-            }
+            # Validate input
+            data = login_schema.load(request.get_json())
             
-            if email in users:
-                user = users[email]
+            # Find user by email
+            user = User.query.filter_by(email=data['email']).first()
+            
+            if user and user.check_password(data['password']):
+                # Create JWT token
+                access_token = create_access_token(identity=user.id)
+                
                 return {
                     'success': True,
-                    'user': user,
-                    'token': f'fake-jwt-token-{user["id"]}'
+                    'user': user_schema.dump(user),
+                    'access_token': access_token
                 }
             else:
                 return {'success': False, 'message': 'Invalid credentials'}, 401
                 
+        except ValidationError as e:
+            return {'success': False, 'message': 'Validation error', 'errors': e.messages}, 400
         except Exception as e:
             return {'success': False, 'message': str(e)}, 500
     
@@ -512,50 +513,44 @@ TKT-1003,VPN connection issues,Pending,High,Network & Connectivity,2025-10-27,ag
     
     @app.route('/api/tickets', methods=['GET', 'POST', 'OPTIONS'])
     def tickets():
-        global ticket_counter
-        
         if request.method == 'OPTIONS':
             return '', 200
             
-        if request.method == 'POST':
-            data = request.get_json()
-            ticket_counter += 1
-            new_ticket = {
-                'id': f'TKT-{ticket_counter}',
-                'title': data.get('title'),
-                'description': data.get('description'),
-                'status': 'New',
-                'priority': data.get('priority'),
-                'category': data.get('category'),
-                'created_by': data.get('created_by'),
-                'assigned_to': None,
-                'created_at': '2025-01-27T12:00:00Z',
-                'sla_violated': False
-            }
-            return new_ticket, 201
+        from app.schemas import tickets_schema, ticket_schema
+        from app.models import Ticket
         
-        # GET request - return sample tickets
-        created_by = request.args.get('created_by')
-        sample_tickets = []
-        
-        # Add sample tickets for the user
-        if created_by:
-            sample_tickets = [
-                {
-                    'id': 'TKT-5001',
-                    'title': 'My Test Ticket',
-                    'description': 'Sample ticket for testing',
-                    'status': 'New',
-                    'priority': 'Medium',
-                    'category': 'Hardware',
-                    'created_by': created_by,
-                    'assigned_to': None,
-                    'created_at': '2025-01-27T12:00:00Z',
-                    'sla_violated': False
-                }
-            ]
-        
-        return sample_tickets
+        if request.method == 'GET':
+            created_by = request.args.get('created_by')
+            if created_by:
+                tickets = Ticket.query.filter_by(created_by=created_by).all()
+            else:
+                tickets = Ticket.query.all()
+            return tickets_schema.dump(tickets)
+            
+        elif request.method == 'POST':
+            try:
+                data = ticket_schema.load(request.get_json())
+                
+                # Generate ticket ID
+                last_ticket = Ticket.query.order_by(Ticket.id.desc()).first()
+                ticket_num = (last_ticket.id + 1) if last_ticket else 1001
+                
+                ticket = Ticket(
+                    ticket_id=f'TKT-{ticket_num}',
+                    title=data['title'],
+                    description=data['description'],
+                    priority=data['priority'],
+                    category=data['category'],
+                    created_by=data['created_by']
+                )
+                
+                db.session.add(ticket)
+                db.session.commit()
+                
+                return ticket_schema.dump(ticket), 201
+                
+            except ValidationError as e:
+                return {'error': 'Validation error', 'messages': e.messages}, 400
     
     @app.route('/api/tickets/<ticket_id>', methods=['PUT', 'OPTIONS'])
     def update_ticket(ticket_id):
@@ -582,24 +577,40 @@ TKT-1003,VPN connection issues,Pending,High,Network & Connectivity,2025-10-27,ag
             'success': True
         }
     
-    @app.route('/api/users', methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+    @app.route('/api/users', methods=['GET', 'POST', 'OPTIONS'])
     def users():
         if request.method == 'OPTIONS':
             return '', 200
             
-        sample_users = [
-            {'id': 'user1', 'name': 'John Smith', 'email': 'john.smith@company.com', 'role': 'Normal User'},
-            {'id': 'user2', 'name': 'Maria Garcia', 'email': 'maria.garcia@company.com', 'role': 'Technical User'},
-            {'id': 'user3', 'name': 'Robert Chen', 'email': 'robert.chen@company.com', 'role': 'Technical Supervisor'},
-            {'id': 'user4', 'name': 'Admin User', 'email': 'admin@company.com', 'role': 'System Admin'},
-            {'id': 'user5', 'name': 'Alice Johnson', 'email': 'alice.johnson@company.com', 'role': 'Normal User'},
-            {'id': 'user6', 'name': 'Bob Williams', 'email': 'bob.williams@company.com', 'role': 'Normal User'},
-            {'id': 'user7', 'name': 'Carol Davis', 'email': 'carol.davis@company.com', 'role': 'Normal User'},
-            {'id': 'user8', 'name': 'David Brown', 'email': 'david.brown@company.com', 'role': 'Technical User'},
-            {'id': 'user9', 'name': 'Emma Wilson', 'email': 'emma.wilson@company.com', 'role': 'Technical User'},
-            {'id': 'user10', 'name': 'Frank Miller', 'email': 'frank.miller@company.com', 'role': 'Technical Supervisor'}
-        ]
-        return sample_users
+        from app.schemas import users_schema, user_schema
+        from app.models import User
+        
+        if request.method == 'GET':
+            users = User.query.all()
+            return users_schema.dump(users)
+            
+        elif request.method == 'POST':
+            try:
+                data = user_schema.load(request.get_json())
+                
+                # Check if email already exists
+                if User.query.filter_by(email=data['email']).first():
+                    return {'error': 'Email already exists'}, 400
+                
+                user = User(
+                    name=data['name'],
+                    email=data['email'],
+                    role=data['role']
+                )
+                user.set_password('password123')  # Default password
+                
+                db.session.add(user)
+                db.session.commit()
+                
+                return user_schema.dump(user), 201
+                
+            except ValidationError as e:
+                return {'error': 'Validation error', 'messages': e.messages}, 400
     
     @app.route('/api/users/<user_id>', methods=['PUT', 'DELETE'])
     def user_detail(user_id):
