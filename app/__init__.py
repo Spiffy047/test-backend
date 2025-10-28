@@ -28,6 +28,55 @@ def create_app(config_name='default'):
         db.init_app(app)
         migrate.init_app(app, db)
         print("Database initialized successfully")
+        
+        # Auto-migrate ticket IDs on startup
+        with app.app_context():
+            try:
+                from app.models import Ticket
+                from sqlalchemy import text
+                
+                # Check if we have tickets without proper TKT-XXXX format
+                non_tkt_tickets = Ticket.query.filter(~Ticket.ticket_id.like('TKT-%')).count()
+                
+                if non_tkt_tickets > 0:
+                    print(f"Migrating {non_tkt_tickets} tickets to TKT-XXXX format...")
+                    
+                    tickets_to_migrate = Ticket.query.filter(~Ticket.ticket_id.like('TKT-%')).all()
+                    
+                    # Find highest existing TKT number
+                    existing_tkt = db.session.execute(
+                        text("SELECT ticket_id FROM tickets WHERE ticket_id LIKE 'TKT-%' ORDER BY ticket_id DESC LIMIT 1")
+                    ).fetchone()
+                    
+                    ticket_counter = 1001
+                    if existing_tkt:
+                        try:
+                            last_num = int(existing_tkt[0].split('-')[1])
+                            ticket_counter = last_num + 1
+                        except (ValueError, IndexError):
+                            pass
+                    
+                    # Migrate each ticket
+                    for ticket in tickets_to_migrate:
+                        old_id = ticket.ticket_id
+                        new_id = f"TKT-{ticket_counter:04d}"
+                        
+                        while Ticket.query.filter_by(ticket_id=new_id).first():
+                            ticket_counter += 1
+                            new_id = f"TKT-{ticket_counter:04d}"
+                        
+                        ticket.ticket_id = new_id
+                        print(f"Migrated: {old_id} -> {new_id}")
+                        ticket_counter += 1
+                    
+                    db.session.commit()
+                    print(f"Successfully migrated {len(tickets_to_migrate)} tickets!")
+                else:
+                    print("All tickets already have proper TKT-XXXX format")
+                    
+            except Exception as e:
+                print(f"Migration error: {e}")
+                
     except Exception as e:
         print(f"Database initialization failed: {e}")
         # Create a minimal app that can still serve basic endpoints
