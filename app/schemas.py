@@ -9,7 +9,7 @@ class UserSchema(Schema):
         'Normal User', 'Technical User', 'Technical Supervisor', 'System Admin'
     ]))
     password = fields.Str(load_only=True, validate=validate.Length(min=6))
-    is_verified = fields.Bool(dump_only=True)
+    is_verified = fields.Bool(dump_only=True, allow_none=True)
     created_at = fields.DateTime(dump_only=True)
     
     class Meta:

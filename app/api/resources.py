@@ -17,9 +17,13 @@ class AuthResource(Resource):
             user = User.query.filter_by(email=data['email']).first()
             
             if user and user.check_password(data['password']):
-                # Temporarily allow login without verification for existing users
-                # if hasattr(user, 'is_verified') and not user.is_verified:
-                #     return {'success': False, 'message': 'Please verify your email before logging in'}, 401
+                # Check verification status safely (handles missing column)
+                try:
+                    if hasattr(user, 'is_verified') and user.is_verified is False:
+                        return {'success': False, 'message': 'Please verify your email before logging in'}, 401
+                except:
+                    # Column doesn't exist yet, allow login
+                    pass
                 
                 access_token = create_access_token(identity=user.id)
                 return {
@@ -137,23 +141,30 @@ class UserListResource(Resource):
             user = User(
                 name=data['name'],
                 email=data['email'],
-                role=data['role'],
-                is_verified=False
+                role=data['role']
             )
             
             password = data.get('password', 'password123')
             user.set_password(password)
             
-            token = user.generate_verification_token()
-            
-            db.session.add(user)
-            db.session.commit()
-            
-            # Send verification email
-            email_service = EmailService()
-            email_service.send_verification_email(user.email, token, user.name)
-            
-            return {'message': 'User created. Please check email for verification link.'}, 201
+            # Set verification status safely
+            try:
+                user.is_verified = False
+                token = user.generate_verification_token()
+                
+                db.session.add(user)
+                db.session.commit()
+                
+                # Send verification email
+                email_service = EmailService()
+                email_service.send_verification_email(user.email, token, user.name)
+                
+                return {'message': 'User created. Please check email for verification link.'}, 201
+            except:
+                # Verification columns don't exist yet, create user normally
+                db.session.add(user)
+                db.session.commit()
+                return user_schema.dump(user), 201
             
         except ValidationError as e:
             return {'error': 'Validation error', 'messages': e.messages}, 400
@@ -248,13 +259,17 @@ class EmailVerificationResource(Resource):
         if not token:
             return {'error': 'Token required'}, 400
         
-        user = User.query.filter_by(verification_token=token).first()
-        
-        if not user:
-            return {'error': 'Invalid token'}, 400
-        
-        if user.verify_email(token):
-            db.session.commit()
-            return {'message': 'Email verified successfully'}
-        else:
-            return {'error': 'Token expired or invalid'}, 400
+        try:
+            user = User.query.filter_by(verification_token=token).first()
+            
+            if not user:
+                return {'error': 'Invalid token'}, 400
+            
+            if user.verify_email(token):
+                db.session.commit()
+                return {'message': 'Email verified successfully'}
+            else:
+                return {'error': 'Token expired or invalid'}, 400
+        except:
+            return {'error': 'Verification system not available'}, 500
+

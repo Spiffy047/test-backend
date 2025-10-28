@@ -23,6 +23,13 @@ def create_app(config_name='default'):
     from config import config
     app.config.from_object(config[config_name])
     
+    # Run database migration on startup
+    try:
+        from auto_migrate import run_migration
+        run_migration()
+    except Exception as e:
+        print(f"Auto-migration failed: {e}")
+    
     # Initialize extensions with error handling
     try:
         db.init_app(app)
