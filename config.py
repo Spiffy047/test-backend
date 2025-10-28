@@ -8,6 +8,8 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or 'jwt-secret-change-in-production'
     JWT_ACCESS_TOKEN_EXPIRES = False
+    SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY')
+    SENDGRID_FROM_EMAIL = os.environ.get('SENDGRID_FROM_EMAIL') or 'mwanikijoe1@gmail.com'
 
 class DevelopmentConfig(Config):
     DEBUG = True

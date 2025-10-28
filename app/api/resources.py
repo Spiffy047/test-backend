@@ -8,6 +8,7 @@ from app.schemas import (
     user_schema, users_schema, ticket_schema, tickets_schema,
     message_schema, messages_schema, login_schema
 )
+from app.services.email_service import EmailService
 
 class AuthResource(Resource):
     def post(self):
@@ -72,6 +73,20 @@ class TicketListResource(Resource):
             
             db.session.add(ticket)
             db.session.commit()
+            
+            # Send email notification
+            try:
+                email_service = EmailService()
+                user = User.query.get(data['created_by'])
+                if user:
+                    email_service.send_ticket_notification(
+                        to_email=user.email,
+                        ticket_id=ticket.ticket_id,
+                        ticket_title=ticket.title,
+                        message_type='created'
+                    )
+            except Exception as e:
+                print(f"Email notification failed: {e}")
             
             return ticket_schema.dump(ticket), 201
             
@@ -174,3 +189,17 @@ class AnalyticsResource(Resource):
                 'rating': 'Excellent'
             }]
         return {'error': 'Endpoint not found'}, 404
+
+class EmailNotificationResource(Resource):
+    def post(self):
+        data = request.get_json()
+        email_service = EmailService()
+        
+        success = email_service.send_ticket_notification(
+            to_email=data.get('to_email'),
+            ticket_id=data.get('ticket_id'),
+            ticket_title=data.get('ticket_title'),
+            message_type=data.get('message_type', 'created')
+        )
+        
+        return {'success': success, 'message': 'Email sent' if success else 'Email failed'}

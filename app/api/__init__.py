@@ -12,7 +12,8 @@ from app.api.resources import (
     UserListResource,
     UserResource,
     MessageListResource,
-    AnalyticsResource
+    AnalyticsResource,
+    EmailNotificationResource
 )
 
 # Register API resources
@@ -23,3 +24,4 @@ api.add_resource(UserListResource, '/users')
 api.add_resource(UserResource, '/users/<int:user_id>')
 api.add_resource(MessageListResource, '/messages')
 api.add_resource(AnalyticsResource, '/analytics/<string:endpoint>')
+api.add_resource(EmailNotificationResource, '/notifications/email')
