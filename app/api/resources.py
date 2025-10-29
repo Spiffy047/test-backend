@@ -112,15 +112,56 @@ class TicketListResource(Resource):
             return {'error': 'Validation error', 'messages': e.messages}, 400
 
 class TicketResource(Resource):
+    def get(self, ticket_id):
+        try:
+            # Try to find by ticket_id first (TKT-XXXX format)
+            ticket = Ticket.query.filter_by(ticket_id=ticket_id).first()
+            if not ticket:
+                # Try to find by numeric ID
+                ticket = Ticket.query.get_or_404(ticket_id)
+            
+            return ticket_schema.dump(ticket)
+        except Exception as e:
+            return {'error': f'Ticket not found: {str(e)}'}, 404
+    
     def put(self, ticket_id):
-        data = request.get_json()
-        return {
-            'id': ticket_id,
-            'status': data.get('status', 'Open'),
-            'assigned_to': data.get('assigned_to'),
-            'message': 'Ticket updated successfully',
-            'success': True
-        }
+        try:
+            # Try to find by ticket_id first (TKT-XXXX format)
+            ticket = Ticket.query.filter_by(ticket_id=ticket_id).first()
+            if not ticket:
+                # Try to find by numeric ID
+                ticket = Ticket.query.get_or_404(ticket_id)
+            
+            data = request.get_json()
+            
+            # Update ticket fields
+            if 'status' in data:
+                ticket.status = data['status']
+            if 'assigned_to' in data:
+                ticket.assigned_to = data['assigned_to']
+            if 'priority' in data:
+                ticket.priority = data['priority']
+            
+            db.session.commit()
+            return ticket_schema.dump(ticket)
+            
+        except Exception as e:
+            return {'error': f'Update failed: {str(e)}'}, 500
+    
+    def delete(self, ticket_id):
+        try:
+            # Try to find by ticket_id first (TKT-XXXX format)
+            ticket = Ticket.query.filter_by(ticket_id=ticket_id).first()
+            if not ticket:
+                # Try to find by numeric ID
+                ticket = Ticket.query.get_or_404(ticket_id)
+            
+            db.session.delete(ticket)
+            db.session.commit()
+            return {'success': True, 'message': 'Ticket deleted'}
+            
+        except Exception as e:
+            return {'error': str(e)}, 500
 
 class UserListResource(Resource):
     def get(self):
@@ -166,6 +207,13 @@ class UserListResource(Resource):
             return {'error': 'Validation error', 'messages': e.messages}, 400
 
 class UserResource(Resource):
+    def get(self, user_id):
+        try:
+            user = User.query.get_or_404(user_id)
+            return user_schema.dump(user)
+        except Exception as e:
+            return {'error': f'User not found: {str(e)}'}, 404
+    
     def put(self, user_id):
         try:
             data = user_schema.load(request.get_json())
@@ -185,6 +233,8 @@ class UserResource(Resource):
             
         except ValidationError as e:
             return {'error': 'Validation error', 'messages': e.messages}, 400
+        except Exception as e:
+            return {'error': f'Update failed: {str(e)}'}, 500
     
     def delete(self, user_id):
         try:
