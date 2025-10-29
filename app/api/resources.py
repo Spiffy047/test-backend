@@ -259,8 +259,15 @@ class MessageListResource(Resource):
         try:
             data = request.get_json()
             
-            # Get ticket internal ID
-            ticket = Ticket.query.filter_by(ticket_id=data.get('ticket_id')).first()
+            # Get ticket internal ID - handle both string ticket_id and numeric ID
+            ticket_id_param = data.get('ticket_id')
+            if isinstance(ticket_id_param, int) or (isinstance(ticket_id_param, str) and ticket_id_param.isdigit()):
+                # If it's a numeric ID, find by internal ID
+                ticket = Ticket.query.get(int(ticket_id_param))
+            else:
+                # If it's a string, find by ticket_id (TKT-XXXX format)
+                ticket = Ticket.query.filter_by(ticket_id=str(ticket_id_param)).first()
+            
             if not ticket:
                 return {'error': 'Ticket not found'}, 404
             
