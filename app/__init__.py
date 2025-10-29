@@ -288,14 +288,16 @@ def create_app(config_name='default'):
             
             result = db.session.execute(text("""
                 SELECT 
+                    id,
                     ticket_id,
                     title,
                     priority,
                     category,
+                    status,
                     created_at,
                     EXTRACT(EPOCH FROM (NOW() - created_at))/3600 as hours_open
                 FROM tickets 
-                WHERE assigned_to IS NULL AND status != 'Closed'
+                WHERE assigned_to IS NULL AND status NOT IN ('Closed', 'Resolved')
                 ORDER BY created_at DESC
                 LIMIT 20
             """))
@@ -303,12 +305,14 @@ def create_app(config_name='default'):
             tickets = []
             for row in result:
                 tickets.append({
-                    'id': row[0],
-                    'title': row[1],
-                    'priority': row[2],
-                    'category': row[3],
-                    'created_at': row[4].isoformat() if row[4] else None,
-                    'hours_open': round(float(row[5]), 1) if row[5] else 0
+                    'id': row[1] or f'TKT-{row[0]}',  # Use ticket_id or generate from id
+                    'ticket_id': row[1] or f'TKT-{row[0]}',
+                    'title': row[2],
+                    'priority': row[3],
+                    'category': row[4],
+                    'status': row[5],
+                    'created_at': row[6].isoformat() if row[6] else None,
+                    'hours_open': round(float(row[7]), 1) if row[7] else 0
                 })
             
             return {'tickets': tickets}

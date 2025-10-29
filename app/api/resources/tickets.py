@@ -136,13 +136,23 @@ class TicketResource(Resource):
         try:
             from sqlalchemy import text
             
-            # Query specific ticket from database
-            result = db.session.execute(text("""
-                SELECT id, ticket_id, title, description, priority, category, status, 
-                       created_by, assigned_to, created_at, updated_at, sla_violated
-                FROM tickets 
-                WHERE ticket_id = :ticket_id
-            """), {'ticket_id': ticket_id})
+            # Query specific ticket from database - handle both ticket_id and numeric id
+            if ticket_id.startswith('TKT-'):
+                # Search by ticket_id
+                result = db.session.execute(text("""
+                    SELECT id, ticket_id, title, description, priority, category, status, 
+                           created_by, assigned_to, created_at, updated_at, sla_violated
+                    FROM tickets 
+                    WHERE ticket_id = :ticket_id
+                """), {'ticket_id': ticket_id})
+            else:
+                # Search by numeric id
+                result = db.session.execute(text("""
+                    SELECT id, ticket_id, title, description, priority, category, status, 
+                           created_by, assigned_to, created_at, updated_at, sla_violated
+                    FROM tickets 
+                    WHERE id = :id
+                """), {'id': ticket_id})
             
             row = result.fetchone()
             if not row:
@@ -175,7 +185,7 @@ class TicketResource(Resource):
             
             # Build dynamic update query based on provided fields
             update_fields = []
-            params = {'ticket_id': ticket_id}
+            params = {}
             
             if 'status' in data:
                 update_fields.append('status = :status')
@@ -199,8 +209,16 @@ class TicketResource(Resource):
             # Add updated_at timestamp
             update_fields.append('updated_at = NOW()')
             
+            # Handle both ticket_id and numeric id formats
+            if ticket_id.startswith('TKT-'):
+                where_clause = 'ticket_id = :ticket_id'
+                params['ticket_id'] = ticket_id
+            else:
+                where_clause = 'id = :id'
+                params['id'] = ticket_id
+            
             # Execute update query
-            query = f"UPDATE tickets SET {', '.join(update_fields)} WHERE ticket_id = :ticket_id"
+            query = f"UPDATE tickets SET {', '.join(update_fields)} WHERE {where_clause}"
             result = db.session.execute(text(query), params)
             
             if result.rowcount == 0:
