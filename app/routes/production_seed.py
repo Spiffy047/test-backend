@@ -77,9 +77,9 @@ def production_seed():
         
         db.session.commit()
         
-        # === COMPREHENSIVE USER BASE ===
+        # === 15 USER SYSTEM ===
         users_data = [
-            # Normal Users (30 users)
+            # Normal Users (8 users)
             ('John Smith', 'john.smith@company.com', 'Normal User'),
             ('Jane Doe', 'jane.doe@company.com', 'Normal User'),
             ('Bob Wilson', 'bob.wilson@company.com', 'Normal User'),
@@ -88,62 +88,19 @@ def production_seed():
             ('Diana Prince', 'diana.prince@company.com', 'Normal User'),
             ('Edward Norton', 'edward.norton@company.com', 'Normal User'),
             ('Fiona Green', 'fiona.green@company.com', 'Normal User'),
-            ('George Miller', 'george.miller@company.com', 'Normal User'),
-            ('Helen Davis', 'helen.davis@company.com', 'Normal User'),
-            ('Ian Thompson', 'ian.thompson@company.com', 'Normal User'),
-            ('Julia Roberts', 'julia.roberts@company.com', 'Normal User'),
-            ('Kevin Hart', 'kevin.hart@company.com', 'Normal User'),
-            ('Linda Carter', 'linda.carter@company.com', 'Normal User'),
-            ('Mark Taylor', 'mark.taylor@company.com', 'Normal User'),
-            ('Nancy Drew', 'nancy.drew@company.com', 'Normal User'),
-            ('Oscar Wilde', 'oscar.wilde@company.com', 'Normal User'),
-            ('Paula Abdul', 'paula.abdul@company.com', 'Normal User'),
-            ('Quinn Adams', 'quinn.adams@company.com', 'Normal User'),
-            ('Rachel Green', 'rachel.green@company.com', 'Normal User'),
-            ('Steve Jobs', 'steve.jobs@company.com', 'Normal User'),
-            ('Tina Turner', 'tina.turner@company.com', 'Normal User'),
-            ('Uma Thurman', 'uma.thurman@company.com', 'Normal User'),
-            ('Victor Hugo', 'victor.hugo@company.com', 'Normal User'),
-            ('Wendy Williams', 'wendy.williams@company.com', 'Normal User'),
-            ('Xavier Woods', 'xavier.woods@company.com', 'Normal User'),
-            ('Yolanda King', 'yolanda.king@company.com', 'Normal User'),
-            ('Zoe Saldana', 'zoe.saldana@company.com', 'Normal User'),
-            ('Aaron Paul', 'aaron.paul@company.com', 'Normal User'),
-            ('Betty White', 'betty.white@company.com', 'Normal User'),
             
-            # Technical Users (15 users)
+            # Technical Users (4 users)
             ('Sarah Johnson', 'sarah.johnson@company.com', 'Technical User'),
             ('Mike Chen', 'mike.chen@company.com', 'Technical User'),
             ('Alex Rivera', 'alex.rivera@company.com', 'Technical User'),
             ('Emma Watson', 'emma.watson@company.com', 'Technical User'),
-            ('Ryan Gosling', 'ryan.gosling@company.com', 'Technical User'),
-            ('Sophia Loren', 'sophia.loren@company.com', 'Technical User'),
-            ('Daniel Craig', 'daniel.craig@company.com', 'Technical User'),
-            ('Natalie Portman', 'natalie.portman@company.com', 'Technical User'),
-            ('Chris Evans', 'chris.evans@company.com', 'Technical User'),
-            ('Scarlett Johansson', 'scarlett.johansson@company.com', 'Technical User'),
-            ('Tom Holland', 'tom.holland@company.com', 'Technical User'),
-            ('Zendaya Coleman', 'zendaya.coleman@company.com', 'Technical User'),
-            ('Robert Downey', 'robert.downey@company.com', 'Technical User'),
-            ('Jennifer Lawrence', 'jennifer.lawrence@company.com', 'Technical User'),
-            ('Leonardo DiCaprio', 'leonardo.dicaprio@company.com', 'Technical User'),
             
-            # Technical Supervisors (8 users)
+            # Technical Supervisors (2 users)
             ('Lisa Rodriguez', 'lisa.rodriguez@company.com', 'Technical Supervisor'),
             ('David Kim', 'david.kim@company.com', 'Technical Supervisor'),
-            ('Maria Garcia', 'maria.garcia@company.com', 'Technical Supervisor'),
-            ('James Wilson', 'james.wilson@company.com', 'Technical Supervisor'),
-            ('Anna Thompson', 'anna.thompson@company.com', 'Technical Supervisor'),
-            ('Carlos Martinez', 'carlos.martinez@company.com', 'Technical Supervisor'),
-            ('Rebecca Lee', 'rebecca.lee@company.com', 'Technical Supervisor'),
-            ('Michael Brown', 'michael.brown@company.com', 'Technical Supervisor'),
             
-            # System Admins (5 users)
-            ('Admin User', 'admin@company.com', 'System Admin'),
-            ('Super Admin', 'superadmin@company.com', 'System Admin'),
-            ('IT Director', 'it.director@company.com', 'System Admin'),
-            ('System Manager', 'system.manager@company.com', 'System Admin'),
-            ('Security Admin', 'security.admin@company.com', 'System Admin')
+            # System Admin (1 user)
+            ('Admin User', 'admin@company.com', 'System Admin')
         ]
         
         # Insert users with proper password hashing
@@ -163,7 +120,7 @@ def production_seed():
         
         db.session.commit()
         
-        # === COMPREHENSIVE TICKET DATASET ===
+        # === TICKET DATASET ===
         now = datetime.utcnow()
         ticket_templates = [
             # Critical Priority Tickets
@@ -198,9 +155,9 @@ def production_seed():
         statuses = ['New', 'Open', 'Pending', 'Closed']
         categories = ['Hardware', 'Software', 'Network', 'Access', 'Security', 'Other']
         
-        # Create 150 tickets with realistic distribution
+        # Create 50 tickets with realistic distribution
         ticket_counter = 1001
-        for i in range(150):
+        for i in range(50):
             template = random.choice(ticket_templates)
             title = f"{template[0]} - Dept {random.randint(1, 10)}"
             description = template[1]
@@ -219,8 +176,8 @@ def production_seed():
                 sla_violated = False
             
             # Random user assignment
-            created_by = random.randint(1, 30)  # Normal users
-            assigned_to = random.randint(31, 45) if status != 'New' else None  # Technical users
+            created_by = random.randint(1, 8)  # Normal users
+            assigned_to = random.randint(9, 12) if status != 'New' else None  # Technical users
             
             # Realistic timestamps
             days_ago = random.randint(1, 90)
@@ -269,10 +226,10 @@ def production_seed():
             "This issue is now resolved. Closing the ticket."
         ]
         
-        # Create 500 messages across tickets
-        for i in range(500):
-            ticket_id = random.randint(1, 150)
-            sender_id = random.randint(1, 58)  # Any user can send messages
+        # Create 100 messages across tickets
+        for i in range(100):
+            ticket_id = random.randint(1, 50)
+            sender_id = random.randint(1, 15)  # Any user can send messages
             message = random.choice(message_templates)
             created_at = now - timedelta(days=random.randint(1, 30), hours=random.randint(1, 23))
             
@@ -296,10 +253,10 @@ def production_seed():
             'unassigned': 'Ticket {} requires assignment to an agent'
         }
         
-        # Create 200 alerts
-        for i in range(200):
-            user_id = random.randint(31, 58)  # Technical users and supervisors
-            ticket_id = random.randint(1, 150)
+        # Create 30 alerts
+        for i in range(30):
+            user_id = random.randint(9, 15)  # Technical users and supervisors
+            ticket_id = random.randint(1, 50)
             alert_type = random.choice(alert_types)
             
             if alert_type == 'sla_violation':
@@ -361,23 +318,22 @@ def production_seed():
             'message': 'Production-scale database created successfully',
             'scale': 'Enterprise-level demonstration data',
             'data': {
-                'users': 58,
-                'tickets': 150,
-                'messages': 500,
-                'alerts': 200
+                'users': 15,
+                'tickets': 50,
+                'messages': 100,
+                'alerts': 30
             },
             'statistics': stats,
             'features_demonstrated': [
-                'Role-based authentication (4 roles, 58 users)',
-                'Comprehensive ticket management (150 tickets)',
+                'Role-based authentication (4 roles, 15 users)',
+                'Comprehensive ticket management (50 tickets)',
                 'SLA tracking with realistic violations',
-                'Extensive messaging system (500 messages)',
-                'Advanced alert system (200 alerts)',
+                'Messaging system (100 messages)',
+                'Alert system (30 alerts)',
                 'Analytics with meaningful data',
                 'Agent workload distribution',
                 'Realistic priority and status distributions',
-                'Historical data spanning 90 days',
-                'Enterprise-scale user base'
+                'Historical data spanning 90 days'
             ],
             'credentials': {
                 'admin': 'admin@company.com / password123',
