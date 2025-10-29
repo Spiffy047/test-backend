@@ -446,19 +446,21 @@ class ImageUploadResource(Resource):
         result = cloudinary_service.upload_image(file, ticket_id, user_id)
         
         if result:
-            # Save to database
-            from app.models import db
-            from app import db as database
-            
-            # Update files table with Cloudinary URL
+            # Add image upload to timeline
             try:
-                database.session.execute(
-                    "INSERT INTO files (ticket_id, filename, file_path, file_size, uploaded_by, uploaded_at) VALUES (%s, %s, %s, %s, %s, NOW())",
-                    (ticket_id, file.filename, result['url'], result['bytes'], user_id)
-                )
-                database.session.commit()
-            except:
-                pass
+                # Get ticket to add message to timeline
+                ticket = Ticket.query.filter_by(ticket_id=ticket_id).first()
+                if ticket:
+                    # Create timeline message for image upload
+                    message = Message(
+                        ticket_id=ticket.id,
+                        sender_id=int(user_id),
+                        message=f'Uploaded image: {file.filename} ({result.get("bytes", 0) // 1024} KB)'
+                    )
+                    db.session.add(message)
+                    db.session.commit()
+            except Exception as e:
+                print(f"Timeline update failed: {e}")
             
             return {
                 'success': True,
