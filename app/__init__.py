@@ -120,17 +120,40 @@ def create_app(config_name='default'):
     
     @app.route('/api/tickets/analytics/sla-adherence')
     def sla_adherence():
-        return {
-            'sla_adherence': 87.2,
-            'total_tickets': 71,
-            'violations': 9,
-            'on_time': 62,
-            'critical_violations': 2,
-            'high_violations': 3,
-            'medium_violations': 3,
-            'low_violations': 1,
-            'trend': 'improving'
-        }
+        try:
+            from sqlalchemy import text
+            
+            result = db.session.execute(text("""
+                SELECT 
+                    COUNT(*) as total_tickets,
+                    COUNT(CASE WHEN sla_violated = false THEN 1 END) as on_time,
+                    COUNT(CASE WHEN sla_violated = true THEN 1 END) as violations
+                FROM tickets
+            """))
+            
+            row = result.fetchone()
+            total_tickets = row[0] if row else 0
+            on_time = row[1] if row else 0
+            violations = row[2] if row else 0
+            
+            sla_adherence = (on_time / total_tickets * 100) if total_tickets > 0 else 0
+            
+            return {
+                'sla_adherence': round(sla_adherence, 1),
+                'total_tickets': total_tickets,
+                'violations': violations,
+                'on_time': on_time,
+                'trend': 'stable'
+            }
+        except Exception as e:
+            print(f"Error fetching SLA adherence: {e}")
+            return {
+                'sla_adherence': 0,
+                'total_tickets': 0,
+                'violations': 0,
+                'on_time': 0,
+                'trend': 'stable'
+            }
     
     @app.route('/api/agents/performance')
     def agent_performance():
@@ -212,95 +235,82 @@ def create_app(config_name='default'):
     
     @app.route('/api/analytics/agent-workload')
     def agent_workload():
-        return [{
-            'agent_id': 'agent1',
-            'name': 'Sarah Johnson',
-            'email': 'sarah.j@company.com',
-            'ticket_count': 16,
-            'active_tickets': 5,
-            'pending_tickets': 2,
-            'closed_tickets': 11
-        }, {
-            'agent_id': 'agent2',
-            'name': 'Mike Chen',
-            'email': 'mike.c@company.com', 
-            'ticket_count': 14,
-            'active_tickets': 4,
-            'pending_tickets': 2,
-            'closed_tickets': 10
-        }, {
-            'agent_id': 'agent3',
-            'name': 'Emily Rodriguez',
-            'email': 'emily.r@company.com',
-            'ticket_count': 13,
-            'active_tickets': 3,
-            'pending_tickets': 1,
-            'closed_tickets': 10
-        }, {
-            'agent_id': 'agent4',
-            'name': 'David Kim',
-            'email': 'david.k@company.com',
-            'ticket_count': 12,
-            'active_tickets': 3,
-            'pending_tickets': 1,
-            'closed_tickets': 11
-        }]
+        try:
+            from sqlalchemy import text
+            
+            result = db.session.execute(text("""
+                SELECT 
+                    assigned_to,
+                    COUNT(*) as total_tickets,
+                    COUNT(CASE WHEN status != 'Resolved' AND status != 'Closed' THEN 1 END) as active_tickets,
+                    COUNT(CASE WHEN status = 'Pending' THEN 1 END) as pending_tickets,
+                    COUNT(CASE WHEN status = 'Resolved' OR status = 'Closed' THEN 1 END) as closed_tickets
+                FROM tickets 
+                WHERE assigned_to IS NOT NULL
+                GROUP BY assigned_to
+            """))
+            
+            agents = []
+            for row in result:
+                agents.append({
+                    'agent_id': row[0],
+                    'name': f'Agent {row[0]}',
+                    'email': f'agent{row[0]}@company.com',
+                    'ticket_count': row[1],
+                    'active_tickets': row[2],
+                    'pending_tickets': row[3],
+                    'closed_tickets': row[4]
+                })
+            
+            return agents
+        except Exception as e:
+            print(f"Error fetching agent workload: {e}")
+            return []
     
     @app.route('/api/analytics/agent-performance-detailed')
     def agent_performance_detailed():
-        return [{
-            'agent_id': 'agent1',
-            'id': 'agent1',
-            'name': 'Sarah Johnson',
-            'email': 'sarah.j@company.com',
-            'active_tickets': 5,
-            'closed_tickets': 28,
-            'avg_handle_time': 3.8,
-            'sla_violations': 1,
-            'rating': 'Excellent',
-            'performance_rating': 'Excellent',
-            'performance_score': 95,
-            'satisfaction_score': 4.8
-        }, {
-            'agent_id': 'agent2',
-            'id': 'agent2',
-            'name': 'Mike Chen',
-            'email': 'mike.c@company.com',
-            'active_tickets': 4,
-            'closed_tickets': 22,
-            'avg_handle_time': 4.5,
-            'sla_violations': 3,
-            'rating': 'Good',
-            'performance_rating': 'Good',
-            'performance_score': 78,
-            'satisfaction_score': 4.3
-        }, {
-            'agent_id': 'agent3',
-            'id': 'agent3',
-            'name': 'Emily Rodriguez',
-            'email': 'emily.r@company.com',
-            'active_tickets': 3,
-            'closed_tickets': 19,
-            'avg_handle_time': 5.2,
-            'sla_violations': 2,
-            'rating': 'Good',
-            'performance_rating': 'Good',
-            'performance_score': 72,
-            'satisfaction_score': 4.1
-        }, {
-            'agent_id': 'agent4',
-            'id': 'agent4',
-            'name': 'David Kim',
-            'email': 'david.k@company.com',
-            'active_tickets': 2,
-            'closed_tickets': 15,
-            'avg_handle_time': 6.1,
-            'sla_violations': 4,
-            'rating': 'Average',
-            'performance_rating': 'Average',
-            'performance_score': 58,
-            'satisfaction_score': 3.9
-        }]
+        try:
+            from sqlalchemy import text
+            
+            result = db.session.execute(text("""
+                SELECT 
+                    assigned_to,
+                    COUNT(CASE WHEN status != 'Resolved' AND status != 'Closed' THEN 1 END) as active_tickets,
+                    COUNT(CASE WHEN status = 'Resolved' OR status = 'Closed' THEN 1 END) as closed_tickets,
+                    COUNT(CASE WHEN sla_violated = true THEN 1 END) as sla_violations,
+                    AVG(CASE WHEN status = 'Resolved' OR status = 'Closed' THEN 
+                        EXTRACT(EPOCH FROM (updated_at - created_at))/3600 END) as avg_handle_time
+                FROM tickets 
+                WHERE assigned_to IS NOT NULL
+                GROUP BY assigned_to
+            """))
+            
+            agents = []
+            for row in result:
+                closed_tickets = row[2] or 0
+                sla_violations = row[3] or 0
+                score = max(0, (closed_tickets * 10) - (sla_violations * 5))
+                rating = 'Excellent' if score >= 50 else 'Good' if score >= 30 else 'Average' if score >= 15 else 'Needs Improvement'
+                
+                agents.append({
+                    'agent_id': row[0],
+                    'id': row[0],
+                    'name': f'Agent {row[0]}',
+                    'email': f'agent{row[0]}@company.com',
+                    'active_tickets': row[1] or 0,
+                    'closed_tickets': closed_tickets,
+                    'avg_handle_time': round(row[4] or 0, 1),
+                    'sla_violations': sla_violations,
+                    'rating': rating,
+                    'performance_rating': rating,
+                    'performance_score': score,
+                    'satisfaction_score': 4.0
+                })
+            
+            return agents
+        except Exception as e:
+            print(f"Error fetching agent performance: {e}")
+            return []
     
     @app.route('/api/alerts/<user_id>/count', methods=['GET', 'OPTIONS'])
     def alert_count(user_id):
