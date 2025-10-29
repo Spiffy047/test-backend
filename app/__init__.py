@@ -158,11 +158,73 @@ def create_app(config_name='default'):
     def debug_cloudinary():
         """Debug endpoint to check Cloudinary configuration"""
         return {
-            'cloud_name': bool(os.environ.get('CLOUDINARY_CLOUD_NAME')),
+            'cloud_name': os.environ.get('CLOUDINARY_CLOUD_NAME', 'Not set'),
             'api_key': bool(os.environ.get('CLOUDINARY_API_KEY')),
             'api_secret': bool(os.environ.get('CLOUDINARY_API_SECRET')),
             'cloudinary_available': True
         }
+    
+    @app.route('/api/test/cloudinary/upload', methods=['POST'])
+    def test_cloudinary_upload():
+        """Test Cloudinary upload functionality"""
+        if 'file' not in request.files:
+            return {'error': 'No file provided'}, 400
+        
+        file = request.files['file']
+        ticket_id = request.form.get('ticket_id', '1001')
+        uploaded_by = request.form.get('uploaded_by', 'test_user')
+        
+        if file.filename == '':
+            return {'error': 'No file selected'}, 400
+        
+        try:
+            from app.services.cloudinary_service import CloudinaryService
+            cloudinary_service = CloudinaryService()
+            result = cloudinary_service.upload_image(file, ticket_id, uploaded_by)
+            
+            if result:
+                return {
+                    'message': 'Cloudinary upload successful',
+                    'url': result['url'],
+                    'public_id': result['public_id'],
+                    'width': result['width'],
+                    'height': result['height'],
+                    'format': result['format'],
+                    'bytes': result['bytes']
+                }, 201
+            else:
+                return {'error': 'Cloudinary upload failed'}, 500
+                
+        except Exception as e:
+            import traceback
+            return {
+                'error': f'Upload error: {str(e)}',
+                'traceback': traceback.format_exc()
+            }, 500
+    
+    @app.route('/api/test/cloudinary/delete/<public_id>', methods=['DELETE'])
+    def test_cloudinary_delete(public_id):
+        """Test Cloudinary delete functionality"""
+        try:
+            from app.services.cloudinary_service import CloudinaryService
+            cloudinary_service = CloudinaryService()
+            success = cloudinary_service.delete_image(public_id)
+            
+            if success:
+                return {
+                    'message': 'Cloudinary delete successful',
+                    'result': 'ok',
+                    'public_id': public_id
+                }
+            else:
+                return {'error': 'Cloudinary delete failed'}, 500
+                
+        except Exception as e:
+            import traceback
+            return {
+                'error': f'Delete error: {str(e)}',
+                'traceback': traceback.format_exc()
+            }, 500
     
     # Note: Authentication endpoints moved to Flask-RESTful resources
     
