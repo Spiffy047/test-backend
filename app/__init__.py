@@ -190,8 +190,22 @@ def create_app(config_name='default'):
             
             counts = {'new': 0, 'open': 0, 'pending': 0, 'closed': 0}
             for row in result:
-                status_key = row[0].lower().replace(' ', '_')
-                counts[status_key] = row[1]
+                status = row[0].lower()
+                # Map database status values to expected keys
+                if status == 'resolved':
+                    counts['closed'] += row[1]
+                elif status == 'in progress':
+                    counts['open'] += row[1]
+                elif status in ['new', 'open', 'pending']:
+                    counts[status] = row[1]
+                else:
+                    # Handle any other status by mapping to appropriate category
+                    if 'close' in status or 'resolve' in status:
+                        counts['closed'] += row[1]
+                    elif 'progress' in status or 'active' in status:
+                        counts['open'] += row[1]
+                    else:
+                        counts['new'] += row[1]
             
             return counts
         except Exception as e:
@@ -240,26 +254,29 @@ def create_app(config_name='default'):
             
             result = db.session.execute(text("""
                 SELECT 
-                    assigned_to,
+                    t.assigned_to,
+                    u.name,
+                    u.email,
                     COUNT(*) as total_tickets,
-                    COUNT(CASE WHEN status != 'Resolved' AND status != 'Closed' THEN 1 END) as active_tickets,
-                    COUNT(CASE WHEN status = 'Pending' THEN 1 END) as pending_tickets,
-                    COUNT(CASE WHEN status = 'Resolved' OR status = 'Closed' THEN 1 END) as closed_tickets
-                FROM tickets 
-                WHERE assigned_to IS NOT NULL
-                GROUP BY assigned_to
+                    COUNT(CASE WHEN t.status NOT IN ('Resolved', 'Closed') THEN 1 END) as active_tickets,
+                    COUNT(CASE WHEN t.status = 'Pending' THEN 1 END) as pending_tickets,
+                    COUNT(CASE WHEN t.status IN ('Resolved', 'Closed') THEN 1 END) as closed_tickets
+                FROM tickets t
+                LEFT JOIN users u ON t.assigned_to = u.id
+                WHERE t.assigned_to IS NOT NULL
+                GROUP BY t.assigned_to, u.name, u.email
             """))
             
             agents = []
             for row in result:
                 agents.append({
                     'agent_id': row[0],
-                    'name': f'Agent {row[0]}',
-                    'email': f'agent{row[0]}@company.com',
-                    'ticket_count': row[1],
-                    'active_tickets': row[2],
-                    'pending_tickets': row[3],
-                    'closed_tickets': row[4]
+                    'name': row[1] or f'Agent {row[0]}',
+                    'email': row[2] or f'agent{row[0]}@company.com',
+                    'ticket_count': row[3],
+                    'active_tickets': row[4],
+                    'pending_tickets': row[5],
+                    'closed_tickets': row[6]
                 })
             
             return agents
@@ -274,32 +291,35 @@ def create_app(config_name='default'):
             
             result = db.session.execute(text("""
                 SELECT 
-                    assigned_to,
-                    COUNT(CASE WHEN status != 'Resolved' AND status != 'Closed' THEN 1 END) as active_tickets,
-                    COUNT(CASE WHEN status = 'Resolved' OR status = 'Closed' THEN 1 END) as closed_tickets,
-                    COUNT(CASE WHEN sla_violated = true THEN 1 END) as sla_violations,
-                    AVG(CASE WHEN status = 'Resolved' OR status = 'Closed' THEN 
-                        EXTRACT(EPOCH FROM (updated_at - created_at))/3600 END) as avg_handle_time
-                FROM tickets 
-                WHERE assigned_to IS NOT NULL
-                GROUP BY assigned_to
+                    t.assigned_to,
+                    u.name,
+                    u.email,
+                    COUNT(CASE WHEN t.status NOT IN ('Resolved', 'Closed') THEN 1 END) as active_tickets,
+                    COUNT(CASE WHEN t.status IN ('Resolved', 'Closed') THEN 1 END) as closed_tickets,
+                    COUNT(CASE WHEN t.sla_violated = true THEN 1 END) as sla_violations,
+                    AVG(CASE WHEN t.status IN ('Resolved', 'Closed') THEN 
+                        EXTRACT(EPOCH FROM (t.updated_at - t.created_at))/3600 END) as avg_handle_time
+                FROM tickets t
+                LEFT JOIN users u ON t.assigned_to = u.id
+                WHERE t.assigned_to IS NOT NULL
+                GROUP BY t.assigned_to, u.name, u.email
             """))
             
             agents = []
             for row in result:
-                closed_tickets = row[2] or 0
-                sla_violations = row[3] or 0
+                closed_tickets = row[4] or 0
+                sla_violations = row[5] or 0
                 score = max(0, (closed_tickets * 10) - (sla_violations * 5))
                 rating = 'Excellent' if score >= 50 else 'Good' if score >= 30 else 'Average' if score >= 15 else 'Needs Improvement'
                 
                 agents.append({
                     'agent_id': row[0],
                     'id': row[0],
-                    'name': f'Agent {row[0]}',
-                    'email': f'agent{row[0]}@company.com',
-                    'active_tickets': row[1] or 0,
+                    'name': row[1] or f'Agent {row[0]}',
+                    'email': row[2] or f'agent{row[0]}@company.com',
+                    'active_tickets': row[3] or 0,
                     'closed_tickets': closed_tickets,
-                    'avg_handle_time': round(row[4] or 0, 1),
+                    'avg_handle_time': round(row[6] or 0, 1),
                     'sla_violations': sla_violations,
                     'rating': rating,
                     'performance_rating': rating,
