@@ -157,8 +157,11 @@ def create_app(config_name='default'):
     @app.route('/api/debug/cloudinary')
     def debug_cloudinary():
         """Debug endpoint to check Cloudinary configuration"""
+        cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME', 'Not set')
         return {
-            'cloud_name': os.environ.get('CLOUDINARY_CLOUD_NAME', 'Not set'),
+            'cloud_name': cloud_name,
+            'expected_cloud_name': 'dn1dznhej',
+            'cloud_name_correct': cloud_name == 'dn1dznhej',
             'api_key': bool(os.environ.get('CLOUDINARY_API_KEY')),
             'api_secret': bool(os.environ.get('CLOUDINARY_API_SECRET')),
             'cloudinary_available': True
