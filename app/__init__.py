@@ -100,20 +100,20 @@ def create_app(config_name='default'):
     # Main RESTful API endpoints (tickets, users, etc.)
     from app.api import api_bp
     app.register_blueprint(api_bp, url_prefix='/api')
-    print("✅ RESTful API routes registered")
+    print(" RESTful API routes registered")
     
     # Administrative endpoints (system management)
     from app.routes.admin import admin_bp
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
-    print("✅ Admin routes registered")
+    print(" Admin routes registered")
     
     # File upload/download endpoints (with fallback to built-in)
     try:
         from app.routes.files import files_bp
         app.register_blueprint(files_bp, url_prefix='/api/files')
-        print("✅ Files routes registered successfully")
+        print(" Files routes registered successfully")
     except ImportError:
-        print("⚠️ Files routes not found, using built-in file endpoints")
+        print(" Files routes not found, using built-in file endpoints")
     
     # Note: Legacy routes removed - using Flask-RESTful API architecture
     # Note: WebSocket events disabled for deployment stability
