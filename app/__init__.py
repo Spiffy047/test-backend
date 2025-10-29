@@ -117,10 +117,10 @@ def create_app(config_name='default'):
     app.register_blueprint(seed_bp, url_prefix='/api/admin')
     print(" Seed routes registered")
     
-    # Direct seeding endpoint
-    from app.routes.direct_seed import direct_seed_bp
-    app.register_blueprint(direct_seed_bp, url_prefix='/api/admin')
-    print(" Direct seed routes registered")
+    # Production seeding endpoint
+    from app.routes.production_seed import production_seed_bp
+    app.register_blueprint(production_seed_bp, url_prefix='/api/admin')
+    print(" Production seed routes registered")
     
     # File upload/download endpoints (with fallback to built-in)
     try:
