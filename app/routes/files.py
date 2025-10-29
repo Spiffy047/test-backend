@@ -227,33 +227,9 @@ def get_ticket_files(ticket_id):
         # Database or other errors
         return jsonify({'error': f'Failed to retrieve files: {str(e)}'}), 500
 
-# === CLOUDINARY TEST ENDPOINTS ===
-
-@files_bp.route('/cloudinary/config', methods=['GET'])
-def test_cloudinary_config():
-    """Test Cloudinary configuration
-    
-    Returns:
-        JSON response with Cloudinary configuration status
-    """
-    try:
-        cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME')
-        api_key = os.environ.get('CLOUDINARY_API_KEY')
-        api_secret = os.environ.get('CLOUDINARY_API_SECRET')
-        
-        return jsonify({
-            'cloud_name': cloud_name,
-            'api_key_set': bool(api_key),
-            'api_secret_set': bool(api_secret),
-            'status': 'configured' if all([cloud_name, api_key, api_secret]) else 'missing_config'
-        })
-        
-    except Exception as e:
-        return jsonify({'error': f'Config check failed: {str(e)}'}), 500
-
 @files_bp.route('/cloudinary/upload', methods=['POST'])
-def test_cloudinary_upload():
-    """Test Cloudinary upload functionality
+def cloudinary_upload():
+    """Upload file to Cloudinary
     
     Expected form data:
         - file: The uploaded file
@@ -267,8 +243,11 @@ def test_cloudinary_upload():
         return jsonify({'error': 'No file provided'}), 400
     
     file = request.files['file']
-    ticket_id = request.form.get('ticket_id', '1001')
-    uploaded_by = request.form.get('uploaded_by', 'test_user')
+    ticket_id = request.form.get('ticket_id')
+    uploaded_by = request.form.get('uploaded_by')
+    
+    if not ticket_id or not uploaded_by:
+        return jsonify({'error': 'Missing ticket_id or uploaded_by'}), 400
     
     if file.filename == '':
         return jsonify({'error': 'No file selected'}), 400
@@ -277,9 +256,9 @@ def test_cloudinary_upload():
         cloudinary_service = CloudinaryService()
         result = cloudinary_service.upload_image(file, ticket_id, uploaded_by)
         
-        if result:
+        if result and 'error' not in result:
             return jsonify({
-                'message': 'Cloudinary upload successful',
+                'message': 'File uploaded successfully',
                 'url': result['url'],
                 'public_id': result['public_id'],
                 'width': result['width'],
@@ -288,33 +267,8 @@ def test_cloudinary_upload():
                 'bytes': result['bytes']
             }), 201
         else:
-            return jsonify({'error': 'Cloudinary upload failed'}), 500
+            error_msg = result.get('error', 'Unknown error') if result else 'Upload failed'
+            return jsonify({'error': error_msg}), 500
             
     except Exception as e:
         return jsonify({'error': f'Upload error: {str(e)}'}), 500
-
-@files_bp.route('/cloudinary/delete/<public_id>', methods=['DELETE'])
-def test_cloudinary_delete(public_id):
-    """Test Cloudinary delete functionality
-    
-    Args:
-        public_id (str): Cloudinary public ID to delete
-    
-    Returns:
-        JSON response with delete result
-    """
-    try:
-        cloudinary_service = CloudinaryService()
-        success = cloudinary_service.delete_image(public_id)
-        
-        if success:
-            return jsonify({
-                'message': 'Cloudinary delete successful',
-                'result': 'ok',
-                'public_id': public_id
-            })
-        else:
-            return jsonify({'error': 'Cloudinary delete failed'}), 500
-            
-    except Exception as e:
-        return jsonify({'error': f'Delete error: {str(e)}'}), 500
