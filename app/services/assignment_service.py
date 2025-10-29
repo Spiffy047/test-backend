@@ -1,15 +1,14 @@
 from typing import Optional
 from app import db
-from app.models.user import Agent
-from app.models.ticket import Ticket
+from app.models import User, Ticket
 
 class AssignmentService:
     """Service for automatic ticket assignment"""
     
     @staticmethod
-    def get_agent_with_least_tickets() -> Optional[Agent]:
+    def get_agent_with_least_tickets() -> Optional[User]:
         """Get agent with the least number of active tickets"""
-        agents = Agent.query.filter(Agent.is_active == True).all()
+        agents = User.query.filter(User.role.in_(['Technical User', 'Technical Supervisor'])).all()
         
         if not agents:
             return None

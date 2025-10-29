@@ -20,7 +20,7 @@ class SLAViolation(db.Model):
     __tablename__ = 'sla_violations'
     
     id = db.Column(db.String(50), primary_key=True)
-    ticket_id = db.Column(db.String(20), db.ForeignKey('tickets.id'), nullable=False)
+    ticket_id = db.Column(db.Integer, db.ForeignKey('tickets.id'), nullable=False)
     policy_id = db.Column(db.String(50), db.ForeignKey('sla_policies.id'), nullable=False)
     violation_type = db.Column(db.String(50), nullable=False)  # 'breach', 'warning', 'escalation'
     violation_time = db.Column(db.DateTime, default=datetime.utcnow)

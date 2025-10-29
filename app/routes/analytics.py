@@ -1,7 +1,6 @@
 from flask import Blueprint, request, jsonify
 from app import db
-from app.models.ticket import Ticket
-from app.models.user import Agent
+from app.models import User, Ticket
 from sqlalchemy import func, case
 from datetime import datetime, timedelta
 
@@ -22,13 +21,15 @@ def get_ticket_status_counts():
 def get_agent_workload():
     """Get current workload distribution across agents"""
     workload = db.session.query(
-        Agent.id,
-        Agent.name,
-        Agent.email,
+        User.id,
+        User.name,
+        User.email,
         func.count(case((Ticket.status != 'Closed', Ticket.id))).label('active_tickets'),
         func.count(case((Ticket.status == 'Closed', Ticket.id))).label('closed_tickets')
-    ).outerjoin(Ticket, Agent.id == Ticket.assigned_to)\
-     .group_by(Agent.id, Agent.name, Agent.email)\
+    ).filter(
+        User.role.in_(['Technical User', 'Technical Supervisor'])
+    ).outerjoin(Ticket, User.id == Ticket.assigned_to)\
+     .group_by(User.id, User.name, User.email)\
      .all()
     
     result = []
@@ -125,15 +126,17 @@ def get_sla_performance():
 def get_agent_performance_detailed():
     """Get detailed agent performance metrics"""
     performance = db.session.query(
-        Agent.id,
-        Agent.name,
-        Agent.email,
+        User.id,
+        User.name,
+        User.email,
         func.count(case((Ticket.status != 'Closed', Ticket.id))).label('active_tickets'),
         func.count(case((Ticket.status == 'Closed', Ticket.id))).label('closed_tickets'),
         func.avg(case((Ticket.status == 'Closed', Ticket.resolution_time_hours))).label('avg_handle_time'),
         func.count(case((Ticket.sla_violated == 1, Ticket.id))).label('sla_violations')
-    ).outerjoin(Ticket, Agent.id == Ticket.assigned_to)\
-     .group_by(Agent.id, Agent.name, Agent.email)\
+    ).filter(
+        User.role.in_(['Technical User', 'Technical Supervisor'])
+    ).outerjoin(Ticket, User.id == Ticket.assigned_to)\
+     .group_by(User.id, User.name, User.email)\
      .all()
     
     result = []

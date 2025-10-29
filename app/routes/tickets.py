@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from app import db
-from app.models.ticket import Ticket, TicketActivity
+from app.models import Ticket
 from app.schemas.ticket_schema import ticket_schema, tickets_schema
 from app.services.assignment_service import AssignmentService
 from app.services.notification_service import NotificationService

@@ -1,8 +1,7 @@
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 from app import db
-from app.models.ticket import Ticket
-from app.models.sla import SLAPolicy, SLAViolation
+from app.models import Ticket
 
 class SLAService:
     """Service for SLA management and monitoring"""

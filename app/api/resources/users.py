@@ -2,7 +2,7 @@ from flask import request
 from flask_restful import Resource
 from flask_jwt_extended import jwt_required
 from app import db
-from app.models.user import User
+from app.models import User
 from app.schemas.user_schema import user_schema, users_schema
 # from flasgger import swag_from  # Disabled for deployment
 

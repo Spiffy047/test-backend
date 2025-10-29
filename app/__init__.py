@@ -1,128 +1,177 @@
-from flask import Flask, request, jsonify
+# IT ServiceDesk Flask Application Factory
+# This module creates and configures the main Flask application with all necessary extensions,
+# routes, and middleware for the IT ServiceDesk system.
+
+# Core Flask imports
+from flask import Flask, request, jsonify, Response
+
+# Database and ORM
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
+
+# Security and authentication
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+
+# Serialization and validation
 from flask_marshmallow import Marshmallow
 from marshmallow import ValidationError
-from dotenv import load_dotenv
-import os
 
+# Configuration and utilities
+from dotenv import load_dotenv
+from datetime import datetime
+import os
+import uuid
+
+# Load environment variables from .env file
 load_dotenv()
 
-# Initialize extensions
-db = SQLAlchemy()
-migrate = Migrate()
-jwt = JWTManager()
-ma = Marshmallow()
+# Initialize Flask extensions (will be bound to app in create_app)
+db = SQLAlchemy()  # Database ORM
+migrate = Migrate()  # Database migrations
+jwt = JWTManager()  # JWT token management (currently disabled)
+ma = Marshmallow()  # Object serialization/deserialization
 
 def create_app(config_name='default'):
+    """Flask application factory pattern
+    
+    Creates and configures a Flask application instance with all necessary
+    extensions, blueprints, and middleware.
+    
+    Args:
+        config_name (str): Configuration environment ('default', 'development', 'production')
+    
+    Returns:
+        Flask: Configured Flask application instance
+    """
+    # Create Flask application instance
     app = Flask(__name__)
     
-    # Load configuration
+    # === CONFIGURATION LOADING ===
+    # Load configuration based on environment
     from config import config
     app.config.from_object(config[config_name])
     
-    # Initialize extensions with error handling
+    # === DATABASE INITIALIZATION ===
+    # Initialize database with error handling and fallback
     try:
+        # Bind SQLAlchemy and Flask-Migrate to app
         db.init_app(app)
         migrate.init_app(app, db)
-        print("Database initialized successfully")
+        print("✅ Database initialized successfully")
         
-        # Auto-migrate ticket IDs on startup
+        # Create database tables if they don't exist
         with app.app_context():
             try:
-                from app.models import Ticket
-                from sqlalchemy import text
-                
-                # Force recreate tickets with proper format on startup
-                print("Recreating tickets with proper TKT-XXXX format...")
-                
-                # Delete all existing tickets
-                db.session.execute(text("DELETE FROM tickets"))
-                
-                # Reset sequence
-                db.session.execute(text("ALTER SEQUENCE tickets_id_seq RESTART WITH 1001"))
-                
-                # Create sample tickets
-                sample_tickets = [
-                    ('TKT-1001', 'Password Reset Request', 'Unable to access email account, need password reset', 'Medium', 'Account Access', 'Open', 1, 2),
-                    ('TKT-1002', 'Software Installation Issue', 'Microsoft Office installation failing on Windows 10', 'High', 'Software', 'In Progress', 1, 2),
-                    ('TKT-1003', 'Network Connectivity Problem', 'Cannot connect to company VPN from home', 'High', 'Network', 'Open', 1, 3),
-                    ('TKT-1004', 'Printer Not Working', 'Office printer showing error message', 'Low', 'Hardware', 'Resolved', 1, 2),
-                    ('TKT-1005', 'Email Sync Issues', 'Outlook not syncing with mobile device', 'Medium', 'Email', 'Pending', 1, 3)
-                ]
-                
-                for ticket_num, title, desc, priority, category, status, user_id, assigned_to in sample_tickets:
-                    db.session.execute(text("""
-                        INSERT INTO tickets (ticket_id, title, description, priority, category, status, created_by, assigned_to, created_at, updated_at)
-                        VALUES (:ticket_num, :title, :desc, :priority, :category, :status, :user_id, :assigned_to, NOW(), NOW())
-                    """), {
-                        'ticket_num': ticket_num, 'title': title, 'desc': desc, 'priority': priority,
-                        'category': category, 'status': status, 'user_id': user_id, 'assigned_to': assigned_to
-                    })
-                
-                db.session.commit()
-                print(f"Successfully recreated {len(sample_tickets)} tickets with proper TKT-XXXX format!")
-                    
+                db.create_all()
+                print("✅ Database tables initialized successfully")
+                print("💡 To seed database with sample data, run: python init_postgres_db.py")
             except Exception as e:
-                print(f"Migration error: {e}")
+                print(f"⚠️ Database table creation error: {e}")
                 
     except Exception as e:
-        print(f"Database initialization failed: {e}")
-        # Create a minimal app that can still serve basic endpoints
+        print(f"❌ Database initialization failed: {e}")
+        # Fallback to in-memory SQLite for basic functionality
+        print("🔄 Falling back to in-memory SQLite database")
         app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         db.init_app(app)
     
-    jwt.init_app(app)
-    ma.init_app(app)
+    # === EXTENSION INITIALIZATION ===
+    # Initialize remaining Flask extensions
+    jwt.init_app(app)  # JWT authentication (currently disabled for deployment)
+    ma.init_app(app)   # Marshmallow serialization
     
-    # Swagger disabled for deployment stability
+    # Note: Swagger/OpenAPI documentation disabled for deployment stability
     
-    # CORS configuration - Allow all origins for deployment
+    # === CORS CONFIGURATION ===
+    # Configure Cross-Origin Resource Sharing for frontend integration
+    # WARNING: Allowing all origins (*) is not recommended for production
+    # TODO: Restrict origins to specific frontend domains in production
     CORS(app, 
-         resources={r"/*": {"origins": "*"}},
-         allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+         resources={r"/*": {"origins": "*"}},  # Allow all origins (dev only)
+         allow_headers=["Content-Type", "Authorization", "X-Requested-With", "X-CSRF-Token"],
          methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-         supports_credentials=False)
+         supports_credentials=False  # Disabled for deployment compatibility
+    )
     
-    # Register Flask-RESTful API
+    # === BLUEPRINT REGISTRATION ===
+    # Register all route blueprints with appropriate URL prefixes
+    
+    # Main RESTful API endpoints (tickets, users, etc.)
     from app.api import api_bp
     app.register_blueprint(api_bp, url_prefix='/api')
+    print("✅ RESTful API routes registered")
     
-    # Register admin routes
+    # Administrative endpoints (system management)
     from app.routes.admin import admin_bp
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
+    print("✅ Admin routes registered")
     
-    # Register recreate tickets route
-    from app.routes.recreate_tickets import recreate_tickets_bp
-    app.register_blueprint(recreate_tickets_bp)
+    # File upload/download endpoints (with fallback to built-in)
+    try:
+        from app.routes.files import files_bp
+        app.register_blueprint(files_bp, url_prefix='/api/files')
+        print("✅ Files routes registered successfully")
+    except ImportError:
+        print("⚠️ Files routes not found, using built-in file endpoints")
     
-    # Legacy routes removed - using Flask-RESTful API only
+    # Note: Legacy routes removed - using Flask-RESTful API architecture
+    # Note: WebSocket events disabled for deployment stability
     
-    # WebSocket events disabled for now
-    # from app.websocket import events
+    # === BASIC API ENDPOINTS ===
+    # Core system endpoints for health checks and API information
     
-    # Basic API endpoints
     @app.route('/')
     def index():
-        return {'message': 'Hotfix ServiceDesk API', 'version': '2.0.0', 'status': 'healthy'}
+        """API root endpoint - returns basic system information"""
+        return {
+            'message': 'IT ServiceDesk API', 
+            'version': '2.0.0', 
+            'status': 'healthy',
+            'documentation': 'Contact system administrator for API documentation'
+        }
     
     @app.route('/health')
     def health_check():
-        return {'status': 'healthy', 'database': 'connected'}
+        """Health check endpoint for monitoring and load balancers"""
+        return {
+            'status': 'healthy', 
+            'database': 'connected',
+            'timestamp': datetime.utcnow().isoformat()
+        }
     
     @app.route('/api/test')
     def test_api():
-        return {'message': 'API is working', 'status': 'ok'}
+        """Simple API test endpoint for connectivity verification"""
+        return {
+            'message': 'API is working', 
+            'status': 'ok',
+            'timestamp': datetime.utcnow().isoformat()
+        }
     
-    # Auth endpoint moved to Flask-RESTful resources
+    # Note: Authentication endpoints moved to Flask-RESTful resources
+    
+    # === ANALYTICS ENDPOINTS ===
+    # These endpoints provide real-time analytics data for dashboards
+    # Note: Analytics endpoints provide real-time data for dashboards
     
     @app.route('/api/tickets/analytics/sla-adherence')
     def sla_adherence():
+        """Calculate SLA adherence metrics from database
+        
+        Returns:
+            JSON object with SLA statistics:
+            - sla_adherence: Percentage of tickets meeting SLA
+            - total_tickets: Total number of tickets
+            - violations: Number of SLA violations
+            - on_time: Number of tickets resolved within SLA
+            - trend: SLA trend indicator
+        """
         try:
+            # Use raw SQL for better performance on analytics queries
             from sqlalchemy import text
             
+            # Query ticket SLA statistics from database
             result = db.session.execute(text("""
                 SELECT 
                     COUNT(*) as total_tickets,
@@ -131,11 +180,13 @@ def create_app(config_name='default'):
                 FROM tickets
             """))
             
+            # Extract results with null safety
             row = result.fetchone()
             total_tickets = row[0] if row else 0
             on_time = row[1] if row else 0
             violations = row[2] if row else 0
             
+            # Calculate SLA adherence percentage (avoid division by zero)
             sla_adherence = (on_time / total_tickets * 100) if total_tickets > 0 else 0
             
             return {
@@ -157,6 +208,15 @@ def create_app(config_name='default'):
     
     @app.route('/api/agents/performance')
     def agent_performance():
+        """Get basic agent performance metrics (legacy endpoint)
+        
+        Returns sample performance data for dashboard compatibility.
+        Note: This endpoint provides fallback data. Use /api/agents/performance from agents blueprint for real data.
+        
+        Returns:
+            JSON array of agent performance objects
+        """
+        # Fallback data for compatibility - real implementation in agents blueprint
         return [{
             'id': 'agent1',
             'name': 'Sarah Johnson',
@@ -168,6 +228,15 @@ def create_app(config_name='default'):
     
     @app.route('/api/agents')
     def agents_list():
+        """Get list of all agents (legacy endpoint)
+        
+        Returns sample agent data for dashboard compatibility.
+        Note: This endpoint provides fallback data. Use /api/agents blueprint for real data.
+        
+        Returns:
+            JSON array of agent objects
+        """
+        # Fallback data for compatibility - real implementation in agents blueprint
         return [{
             'id': 'agent1',
             'name': 'Sarah Johnson',
@@ -409,29 +478,53 @@ def create_app(config_name='default'):
     # File storage for uploaded files
     uploaded_files = {}
     
-    @app.route('/api/files/upload', methods=['POST'])
+    @app.route('/api/files/upload', methods=['POST', 'OPTIONS'])
     def upload_file():
+        if request.method == 'OPTIONS':
+            return '', 200
+            
         try:
             if 'file' not in request.files:
                 return {'error': 'No file provided'}, 400
             
             file = request.files['file']
-            ticket_id = request.form.get('ticket_id', 'unknown')
-            uploaded_by = request.form.get('uploaded_by', 'unknown')
+            ticket_id = request.form.get('ticket_id')
+            uploaded_by = request.form.get('uploaded_by')
+            
+            if not ticket_id or not uploaded_by:
+                return {'error': 'Missing ticket_id or uploaded_by'}, 400
             
             if file.filename == '':
                 return {'error': 'No file selected'}, 400
             
-            # Store file info (in production, save to cloud storage)
-            file_id = f'file_{len(uploaded_files) + 1}'
+            # Validate file type
+            allowed_extensions = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'xls', 'xlsx', 'zip', 'log'}
+            if '.' not in file.filename or file.filename.rsplit('.', 1)[1].lower() not in allowed_extensions:
+                return {'error': 'File type not allowed'}, 400
+            
+            # Read file content for size calculation
+            file_content = file.read()
+            file_size = len(file_content)
+            
+            # Check file size (10MB limit)
+            if file_size > 10 * 1024 * 1024:
+                return {'error': 'File too large (max 10MB)'}, 400
+            
+            # Reset file pointer
+            file.seek(0)
+            
+            # Store file info in memory (in production, save to cloud storage)
+            import uuid
+            file_id = str(uuid.uuid4())
             file_info = {
                 'id': file_id,
                 'filename': file.filename,
-                'file_size_mb': round(len(file.read()) / (1024 * 1024), 2),
+                'file_size_mb': round(file_size / (1024 * 1024), 2),
                 'ticket_id': ticket_id,
                 'uploaded_by': uploaded_by,
                 'download_url': f'/api/files/download/{file_id}',
-                'uploaded_at': '2025-10-27T12:30:00Z'
+                'uploaded_at': datetime.utcnow().isoformat() + 'Z',
+                'content': file_content  # Store content in memory for demo
             }
             
             if ticket_id not in uploaded_files:
@@ -442,22 +535,27 @@ def create_app(config_name='default'):
             if ticket_id not in messages_store:
                 messages_store[ticket_id] = []
             
-            from datetime import datetime
             upload_message = {
                 'id': f'file_msg_{len(messages_store[ticket_id]) + 100}',
                 'ticket_id': ticket_id,
                 'sender_id': uploaded_by,
                 'sender_name': 'User',
                 'sender_role': 'Normal User',
-                'message': f'Uploaded file: {file.filename}',
+                'message': f'Uploaded file: {file.filename} ({file_info["file_size_mb"]} MB)',
                 'timestamp': datetime.utcnow().isoformat() + 'Z',
-                'type': 'message'
+                'type': 'file_upload'
             }
             messages_store[ticket_id].append(upload_message)
             
-            return file_info, 200
+            return {
+                'id': file_info['id'],
+                'filename': file_info['filename'],
+                'file_size_mb': file_info['file_size_mb'],
+                'uploaded_at': file_info['uploaded_at']
+            }, 200
             
         except Exception as e:
+            print(f"File upload error: {e}")
             return {'error': str(e)}, 500
     
     # Global message storage per ticket (in production, use database)
@@ -651,7 +749,19 @@ TKT-1003,VPN connection issues,Pending,High,Network & Connectivity,2025-10-27,ag
     
     @app.route('/api/files/download/<file_id>')
     def download_file(file_id):
-        return {'message': 'File download endpoint', 'file_id': file_id}
+        # Find file in uploaded_files
+        for ticket_id, files in uploaded_files.items():
+            for file_info in files:
+                if file_info['id'] == file_id:
+                    # Return file content (in production, stream from cloud storage)
+                    return Response(
+                        file_info.get('content', b'File content not available'),
+                        mimetype='application/octet-stream',
+                        headers={
+                            'Content-Disposition': f'attachment; filename="{file_info["filename"]}"'
+                        }
+                    )
+        return {'error': 'File not found'}, 404
     
     @app.route('/api/sla/realtime-adherence')
     def realtime_sla_adherence():

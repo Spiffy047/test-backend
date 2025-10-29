@@ -15,7 +15,7 @@ def handle_connect():
         join_room(f'user_{user_id}')
         
         # Join technical users room if applicable
-        from app.models.user import User
+        from app.models import User
         user = User.query.get(user_id)
         if user and user.role in ['Technical User', 'Technical Supervisor']:
             join_room('technical_users')

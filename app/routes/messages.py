@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from app import db
-from app.models.ticket import TicketMessage, TicketActivity
-from app.schemas.ticket_schema import message_schema, messages_schema, activity_schema, activities_schema
+from app.models import Message
+from app.schemas.ticket_schema import ticket_schema, tickets_schema
 import uuid
 
 messages_bp = Blueprint('messages', __name__)

@@ -1,19 +1,24 @@
-# Environment variables
+# Environment variables and secrets
 .env
-.env.local
-.env.production
+.env.*
+!.env.example
+config_local.py
+secrets.py
 
-# Database
+# Database files
 *.db
 *.sqlite
 *.sqlite3
+instance/
 
-# Python
+# Python cache and compiled files
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+
+# Python build and distribution
 build/
 develop-eggs/
 dist/
@@ -29,25 +34,65 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
 # Virtual environments
 venv/
 env/
 ENV/
+.venv/
+pyvenv.cfg
 
-# IDE
+# Testing and coverage
+.coverage
+.pytest_cache/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Flask instance folder
+instance/
+
+# File uploads and temporary files
+uploads/
+temp/
+tmp/
+*.tmp
+*.bak
+
+# IDE and editor files
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
+.spyderproject
+.spyproject
 
 # Logs
 *.log
+logs/
 
-# OS
+# OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
-# Sensitive files
-config_local.py
-secrets.py
+# Deployment and production
+.env.production
+.env.staging
+
+# Documentation builds
+docs/_build/
+
+# PyCharm
+.idea/

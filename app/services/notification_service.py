@@ -1,9 +1,7 @@
 # Notification service for real-time alerts and email notifications
 from typing import Dict, List, Optional
 from datetime import datetime
-from app.models.ticket import Ticket
-from app.models.user import User, Agent
-from app.models.alert import Alert
+from app.models import User, Ticket, Alert
 from app import db
 # socketio disabled for deployment
 import uuid
@@ -46,7 +44,7 @@ class NotificationService:
     # WebSocket methods disabled for deployment
     
     @staticmethod
-    def notify_ticket_assignment(ticket: Ticket, agent: Agent, performed_by: str = None) -> bool:
+    def notify_ticket_assignment(ticket: Ticket, agent: User, performed_by: str = None) -> bool:
         """Notify agent about ticket assignment with real-time updates"""
         print(f"ASSIGNMENT: Ticket {ticket.id} assigned to {agent.name}")
         

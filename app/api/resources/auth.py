@@ -2,7 +2,7 @@ from flask import request
 from flask_restful import Resource
 from flask_jwt_extended import create_access_token, create_refresh_token
 from app import db
-from app.models.user import User
+from app.models import User
 from app.models.auth import UserAuth
 from app.services.email_service import EmailService
 # from flasgger import swag_from  # Disabled for deployment

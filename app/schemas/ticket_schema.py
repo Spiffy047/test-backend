@@ -1,6 +1,6 @@
 # Ticket-related schemas for API serialization
 from app import ma
-from app.models.ticket import Ticket, TicketMessage, TicketActivity
+from app.models import Ticket
 from marshmallow import fields
 
 # Main ticket schema with SLA calculations
@@ -18,24 +18,6 @@ class TicketSchema(ma.SQLAlchemyAutoSchema):
         """Calculate SLA violation status"""
         return obj.check_sla_violation()
 
-# Chat message schema
-class TicketMessageSchema(ma.SQLAlchemyAutoSchema):
-    class Meta:
-        model = TicketMessage
-        load_instance = True
-        include_fk = True
-
-# Activity log schema for ticket timeline
-class TicketActivitySchema(ma.SQLAlchemyAutoSchema):
-    class Meta:
-        model = TicketActivity
-        load_instance = True
-        include_fk = True
-
 # Schema instances for API responses
 ticket_schema = TicketSchema()
 tickets_schema = TicketSchema(many=True)
-message_schema = TicketMessageSchema()
-messages_schema = TicketMessageSchema(many=True)
-activity_schema = TicketActivitySchema()
-activities_schema = TicketActivitySchema(many=True)
