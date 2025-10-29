@@ -97,10 +97,15 @@ def create_app(config_name='default'):
     # === BLUEPRINT REGISTRATION ===
     # Register all route blueprints with appropriate URL prefixes
     
+    # Register Swagger documentation
+    from app.swagger import swagger_bp
+    app.register_blueprint(swagger_bp, url_prefix='/api')
+    print("✅ Swagger documentation registered at /api/docs/")
+    
     # Main RESTful API endpoints (tickets, users, etc.)
     from app.api import api_bp
     app.register_blueprint(api_bp, url_prefix='/api')
-    print(" RESTful API routes registered")
+    print("✅ RESTful API routes registered")
     
     # Administrative endpoints (system management)
     from app.routes.admin import admin_bp
