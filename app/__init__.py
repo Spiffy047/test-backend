@@ -206,10 +206,16 @@ def create_app(config_name='default'):
                 'traceback': traceback.format_exc()
             }, 500
     
-    @app.route('/api/test/cloudinary/delete/<public_id>', methods=['DELETE'])
-    def test_cloudinary_delete(public_id):
+    @app.route('/api/test/cloudinary/delete', methods=['POST'])
+    def test_cloudinary_delete():
         """Test Cloudinary delete functionality"""
         try:
+            data = request.get_json()
+            if not data or 'public_id' not in data:
+                return {'error': 'public_id required in request body'}, 400
+            
+            public_id = data['public_id']
+            
             from app.services.cloudinary_service import CloudinaryService
             cloudinary_service = CloudinaryService()
             result = cloudinary_service.delete_image(public_id)

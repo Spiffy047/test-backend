@@ -105,8 +105,11 @@ def test_cloudinary_delete(public_id):
     print(f"\n🔄 Testing Cloudinary Delete for: {public_id}")
     
     try:
-        response = requests.delete(
-            f"{BASE_URL}/api/test/cloudinary/delete/{public_id}",
+        # Send public_id in JSON body instead of URL parameter
+        response = requests.post(
+            f"{BASE_URL}/api/test/cloudinary/delete",
+            json={'public_id': public_id},
+            headers={'Content-Type': 'application/json'},
             timeout=15
         )
         
