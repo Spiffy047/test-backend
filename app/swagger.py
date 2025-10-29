@@ -1,4 +1,4 @@
-from flask_restx import Api, Resource, fields
+from flask_restx import Api, Resource, fields, Namespace
 from flask import Blueprint
 
 # Create Swagger API blueprint
@@ -21,6 +21,17 @@ api = Api(
     },
     security='Bearer'
 )
+
+# Create namespaces
+auth_ns = Namespace('auth', description='Authentication operations')
+tickets_ns = Namespace('tickets', description='Ticket management')
+users_ns = Namespace('users', description='User management')
+files_ns = Namespace('files', description='File operations')
+
+api.add_namespace(auth_ns)
+api.add_namespace(tickets_ns)
+api.add_namespace(users_ns)
+api.add_namespace(files_ns)
 
 # Define API models for documentation
 user_model = api.model('User', {
@@ -52,3 +63,39 @@ login_model = api.model('Login', {
     'email': fields.String(required=True, description='User email'),
     'password': fields.String(required=True, description='User password')
 })
+
+# Add sample endpoints to show in documentation
+@auth_ns.route('/login')
+class LoginDoc(Resource):
+    @auth_ns.expect(login_model)
+    @auth_ns.doc('login_user')
+    def post(self):
+        """User login"""
+        return {'access_token': 'jwt_token_here', 'user': {}}
+
+@tickets_ns.route('')
+class TicketsDoc(Resource):
+    @tickets_ns.doc('list_tickets')
+    def get(self):
+        """Get all tickets"""
+        return []
+    
+    @tickets_ns.expect(ticket_model)
+    @tickets_ns.doc('create_ticket')
+    def post(self):
+        """Create new ticket"""
+        return {}
+
+@users_ns.route('')
+class UsersDoc(Resource):
+    @users_ns.doc('list_users')
+    def get(self):
+        """Get all users"""
+        return []
+
+@files_ns.route('/cloudinary/upload')
+class FileUploadDoc(Resource):
+    @files_ns.doc('upload_file')
+    def post(self):
+        """Upload file to Cloudinary"""
+        return {'url': 'cloudinary_url', 'public_id': 'file_id'}
