@@ -110,6 +110,11 @@ def create_app(config_name='default'):
     app.register_blueprint(config_bp, url_prefix='/api/config')
     print("✅ Configuration routes registered")
     
+    # Database initialization
+    from app.routes.db_init import db_init_bp
+    app.register_blueprint(db_init_bp, url_prefix='/api/db')
+    print("✅ Database init routes registered")
+    
     # Register Swagger documentation
     from app.swagger import swagger_bp
     app.register_blueprint(swagger_bp, url_prefix='/api')
