@@ -154,6 +154,16 @@ def create_app(config_name='default'):
             'timestamp': datetime.utcnow().isoformat()
         }
     
+    @app.route('/api/debug/cloudinary')
+    def debug_cloudinary():
+        """Debug endpoint to check Cloudinary configuration"""
+        return {
+            'cloud_name': bool(os.environ.get('CLOUDINARY_CLOUD_NAME')),
+            'api_key': bool(os.environ.get('CLOUDINARY_API_KEY')),
+            'api_secret': bool(os.environ.get('CLOUDINARY_API_SECRET')),
+            'cloudinary_available': True
+        }
+    
     # Note: Authentication endpoints moved to Flask-RESTful resources
     
     # === ANALYTICS ENDPOINTS ===
