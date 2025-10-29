@@ -112,6 +112,11 @@ def create_app(config_name='default'):
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
     print(" Admin routes registered")
     
+    # Database seeding endpoint
+    from app.routes.seed import seed_bp
+    app.register_blueprint(seed_bp, url_prefix='/api/admin')
+    print(" Seed routes registered")
+    
     # File upload/download endpoints (with fallback to built-in)
     try:
         from app.routes.files import files_bp
