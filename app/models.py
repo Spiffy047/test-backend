@@ -29,8 +29,6 @@ class User(db.Model):
     
     # Email verification system
     is_verified = db.Column(db.Boolean, default=True, nullable=True)  # Email verification status
-    verification_token = db.Column(db.String(100), nullable=True)  # Token for email verification
-    token_expires_at = db.Column(db.DateTime, nullable=True)  # Token expiration time
     
     # Audit timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)  # Account creation time
@@ -50,27 +48,7 @@ class User(db.Model):
         """Verify password against stored hash"""
         return check_password_hash(self.password_hash, password)
     
-    # Email verification methods
-    def generate_verification_token(self):
-        """Generate secure token for email verification (24-hour expiry)"""
-        import secrets
-        from datetime import timedelta
-        self.verification_token = secrets.token_urlsafe(32)  # Cryptographically secure token
-        self.token_expires_at = datetime.utcnow() + timedelta(hours=24)  # 24-hour expiry
-        return self.verification_token
-    
-    def verify_email(self, token):
-        """Verify email using provided token"""
-        # Check if token matches and hasn't expired
-        if (self.verification_token == token and 
-            self.token_expires_at and 
-            datetime.utcnow() < self.token_expires_at):
-            # Mark as verified and clear token
-            self.is_verified = True
-            self.verification_token = None
-            self.token_expires_at = None
-            return True
-        return False
+
     
     def __repr__(self):
         return f'<User {self.email}>'

@@ -357,25 +357,7 @@ class EmailNotificationResource(Resource):
 
 class EmailVerificationResource(Resource):
     def post(self):
-        data = request.get_json()
-        token = data.get('token')
-        
-        if not token:
-            return {'error': 'Token required'}, 400
-        
-        try:
-            user = User.query.filter_by(verification_token=token).first()
-            
-            if not user:
-                return {'error': 'Invalid token'}, 400
-            
-            if user.verify_email(token):
-                db.session.commit()
-                return {'message': 'Email verified successfully'}
-            else:
-                return {'error': 'Token expired or invalid'}, 400
-        except:
-            return {'error': 'Verification system not available'}, 500
+        return {'error': 'Email verification not implemented'}, 501
 
 class MigrateTicketIDsResource(Resource):
     def post(self):
