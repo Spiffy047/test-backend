@@ -20,33 +20,22 @@ class AuthResource(Resource):
             if not email or not password:
                 return {'success': False, 'message': 'Email and password required'}, 400
             
-            # Check user_auth table for authentication
-            from sqlalchemy import text
-            auth_result = db.session.execute(
-                text("SELECT password_hash FROM user_auth WHERE email = :email AND is_active = true"),
-                {'email': email}
-            ).fetchone()
+            user = User.query.filter_by(email=email).first()
             
-            if auth_result:
-                # Verify password using Werkzeug
-                from werkzeug.security import check_password_hash
-                if check_password_hash(auth_result[0], password):
-                    # Get user profile from users table
-                    user = User.query.filter_by(email=email).first()
-                    if user:
-                        access_token = create_access_token(identity=user.id)
-                        return {
-                            'success': True,
-                            'user': {
-                                'id': user.id,
-                                'name': user.name,
-                                'email': user.email,
-                                'role': user.role
-                            },
-                            'access_token': access_token
-                        }
-            
-            return {'success': False, 'message': 'Invalid credentials'}, 401
+            if user and user.check_password(password):
+                access_token = create_access_token(identity=user.id)
+                return {
+                    'success': True,
+                    'user': {
+                        'id': user.id,
+                        'name': user.name,
+                        'email': user.email,
+                        'role': user.role
+                    },
+                    'access_token': access_token
+                }
+            else:
+                return {'success': False, 'message': 'Invalid credentials'}, 401
                 
         except Exception as e:
             return {'success': False, 'message': str(e)}, 500
