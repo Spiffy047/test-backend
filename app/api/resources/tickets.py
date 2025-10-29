@@ -78,7 +78,7 @@ class TicketListResource(Resource):
         
         required_fields = ['title', 'description', 'category']
         for field in required_fields:
-            if not data.get(field):
+            if not data.get(field) or str(data.get(field)).strip() == '':
                 return {'error': f'Missing required field: {field}'}, 400
         
         user_id = data.get('created_by', 1)  # Use provided user ID or default to 1

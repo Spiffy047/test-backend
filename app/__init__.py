@@ -409,14 +409,19 @@ def create_app(config_name='default'):
     def alert_count(user_id):
         if request.method == 'OPTIONS':
             return '', 200
-        # Return different counts based on user role
-        if user_id in ['user1']:
-            return {'count': 2}
-        elif user_id in ['user2', 'agent1']:
-            return {'count': 3}
-        elif user_id in ['user3']:
-            return {'count': 5}
-        return {'count': 0}
+        
+        try:
+            from sqlalchemy import text
+            
+            result = db.session.execute(text("""
+                SELECT COUNT(*) FROM alerts WHERE user_id = :user_id AND is_read = false
+            """), {'user_id': user_id})
+            
+            count = result.scalar() or 0
+            return {'count': count}
+        except Exception as e:
+            print(f"Error fetching alert count for user {user_id}: {e}")
+            return {'count': 0}
     
     @app.route('/api/messages/ticket/<ticket_id>/timeline')
     def ticket_timeline(ticket_id):
@@ -757,17 +762,35 @@ TKT-1003,VPN connection issues,Pending,High,Network & Connectivity,2025-10-27,ag
     def user_alerts(user_id):
         if request.method == 'OPTIONS':
             return '', 200
-        return [
-            {
-                'id': 'alert1',
-                'title': 'SLA Violation',
-                'message': 'Ticket TKT-2001 has violated SLA',
-                'alert_type': 'sla_violation',
-                'ticket_id': 'TKT-2001',
-                'created_at': '2025-01-27T10:00:00Z',
-                'is_read': False
-            }
-        ]
+        
+        try:
+            from sqlalchemy import text
+            
+            result = db.session.execute(text("""
+                SELECT a.id, a.title, a.message, a.alert_type, a.is_read, a.created_at, t.ticket_id
+                FROM alerts a
+                LEFT JOIN tickets t ON a.ticket_id = t.id
+                WHERE a.user_id = :user_id
+                ORDER BY a.created_at DESC
+                LIMIT 20
+            """), {'user_id': user_id})
+            
+            alerts = []
+            for row in result:
+                alerts.append({
+                    'id': row[0],
+                    'title': row[1],
+                    'message': row[2],
+                    'alert_type': row[3],
+                    'is_read': row[4],
+                    'created_at': row[5].isoformat() + 'Z' if row[5] else None,
+                    'ticket_id': row[6]
+                })
+            
+            return alerts
+        except Exception as e:
+            print(f"Error fetching alerts for user {user_id}: {e}")
+            return []
     
     @app.route('/api/files/download/<file_id>')
     def download_file(file_id):
