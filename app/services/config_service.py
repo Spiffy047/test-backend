@@ -1,5 +1,5 @@
 from app import db
-from app.models.config import UserRole, TicketPriority, TicketStatus, TicketCategory
+from app.models import UserRole, TicketPriority, TicketStatus, TicketCategory
 
 class ConfigService:
     @staticmethod
