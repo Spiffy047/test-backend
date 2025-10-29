@@ -76,9 +76,13 @@ def create_message():
         
         internal_ticket_id = ticket_row[0]
         
+        sender_id = data.get('sender_id')
+        if not sender_id:
+            return {'error': 'sender_id field is required'}, 400
+        
         message = Message(
             ticket_id=internal_ticket_id,
-            sender_id=data.get('sender_id', 1),
+            sender_id=sender_id,
             message=data['message']
         )
         

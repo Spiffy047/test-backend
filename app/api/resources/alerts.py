@@ -9,57 +9,35 @@ class AlertListResource(Resource):
     # @jwt_required()  # Disabled for deployment testing
     # Swagger documentation disabled for deployment
     def get(self, user_id):
-        # Return sample alerts based on user
-        sample_alerts = []
-        
-        if user_id == 'user1':
-            sample_alerts = [{
-                'id': 'alert1',
-                'ticket_id': 'TKT-1001',
-                'alert_type': 'status_change',
-                'title': 'Ticket Status Updated',
-                'message': 'Your ticket TKT-1001 status changed to Open',
-                'is_read': False,
-                'created_at': '2025-10-27T10:30:00Z'
-            }, {
-                'id': 'alert2',
-                'ticket_id': 'TKT-1002',
-                'alert_type': 'assignment',
-                'title': 'Ticket Assigned',
-                'message': 'Your ticket TKT-1002 has been assigned to Sarah Johnson',
-                'is_read': False,
-                'created_at': '2025-10-27T11:00:00Z'
-            }]
-        elif user_id == 'user2':
-            sample_alerts = [{
-                'id': 'alert3',
-                'ticket_id': 'TKT-1003',
-                'alert_type': 'sla_violation',
-                'title': 'SLA Breach Alert',
-                'message': 'Ticket TKT-1003 has breached SLA - requires immediate attention',
-                'is_read': False,
-                'created_at': '2025-10-27T11:30:00Z'
-            }, {
-                'id': 'alert4',
-                'ticket_id': 'TKT-1004',
-                'alert_type': 'new_message',
-                'title': 'New Message',
-                'message': 'New message received on ticket TKT-1004',
-                'is_read': True,
-                'created_at': '2025-10-27T12:00:00Z'
-            }]
-        elif user_id == 'user3':
-            sample_alerts = [{
-                'id': 'alert5',
-                'ticket_id': 'TKT-1001',
-                'alert_type': 'sla_violation',
-                'title': 'Multiple SLA Violations',
-                'message': '3 tickets have breached SLA in the last hour',
-                'is_read': False,
-                'created_at': '2025-10-27T12:15:00Z'
-            }]
-        
-        return sample_alerts
+        try:
+            from sqlalchemy import text
+            from app import db
+            
+            result = db.session.execute(text("""
+                SELECT a.id, a.title, a.message, a.alert_type, a.is_read, a.created_at, t.ticket_id
+                FROM alerts a
+                LEFT JOIN tickets t ON a.ticket_id = t.id
+                WHERE a.user_id = :user_id
+                ORDER BY a.created_at DESC
+                LIMIT 20
+            """), {'user_id': user_id})
+            
+            alerts = []
+            for row in result:
+                alerts.append({
+                    'id': row[0],
+                    'title': row[1],
+                    'message': row[2],
+                    'alert_type': row[3],
+                    'is_read': row[4],
+                    'created_at': row[5].isoformat() + 'Z' if row[5] else None,
+                    'ticket_id': row[6]
+                })
+            
+            return alerts
+        except Exception as e:
+            print(f"Error fetching alerts for user {user_id}: {e}")
+            return []
 
 class AlertResource(Resource):
     # @jwt_required()  # Disabled for deployment testing

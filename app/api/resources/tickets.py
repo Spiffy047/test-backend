@@ -81,7 +81,9 @@ class TicketListResource(Resource):
             if not data.get(field) or str(data.get(field)).strip() == '':
                 return {'error': f'Missing required field: {field}'}, 400
         
-        user_id = data.get('created_by', 1)  # Use provided user ID or default to 1
+        user_id = data.get('created_by')
+        if not user_id:
+            return {'error': 'created_by field is required'}, 400
         
         try:
             # Generate sequential ticket ID starting from TKT-1001

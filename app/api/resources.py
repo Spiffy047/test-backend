@@ -223,14 +223,42 @@ class AnalyticsResource(Resource):
                 'trend': 'improving'
             }
         elif endpoint == 'agent-performance':
-            return [{
-                'id': 'agent1',
-                'name': 'Sarah Johnson',
-                'tickets_closed': 25,
-                'avg_handle_time': 4.2,
-                'sla_violations': 2,
-                'rating': 'Excellent'
-            }]
+            try:
+                from sqlalchemy import text
+                
+                result = db.session.execute(text("""
+                    SELECT 
+                        u.id, u.name,
+                        COUNT(CASE WHEN t.status IN ('Resolved', 'Closed') THEN 1 END) as tickets_closed,
+                        AVG(CASE WHEN t.status IN ('Resolved', 'Closed') AND t.resolved_at IS NOT NULL THEN 
+                            EXTRACT(EPOCH FROM (t.resolved_at - t.created_at))/3600 END) as avg_handle_time,
+                        COUNT(CASE WHEN t.sla_violated = true THEN 1 END) as sla_violations
+                    FROM users u
+                    LEFT JOIN tickets t ON u.id = t.assigned_to
+                    WHERE u.role IN ('Technical User', 'Technical Supervisor')
+                    GROUP BY u.id, u.name
+                """))
+                
+                agents = []
+                for row in result:
+                    closed = row[2] or 0
+                    violations = row[4] or 0
+                    score = max(0, (closed * 10) - (violations * 5))
+                    rating = 'Excellent' if score >= 50 else 'Good' if score >= 30 else 'Average' if score >= 15 else 'Needs Improvement'
+                    
+                    agents.append({
+                        'id': row[0],
+                        'name': row[1],
+                        'tickets_closed': closed,
+                        'avg_handle_time': round(row[3] or 0, 1),
+                        'sla_violations': violations,
+                        'rating': rating
+                    })
+                
+                return agents
+            except Exception as e:
+                print(f"Error fetching agent performance: {e}")
+                return []
         return {'error': 'Endpoint not found'}, 404
 
 class EmailNotificationResource(Resource):
