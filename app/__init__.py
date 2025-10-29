@@ -115,15 +115,15 @@ def create_app(config_name='default'):
     app.register_blueprint(db_init_bp, url_prefix='/api/db')
     print("✅ Database init routes registered")
     
-    # Register Swagger documentation
-    from app.swagger import swagger_bp
-    app.register_blueprint(swagger_bp, url_prefix='/api')
-    print("✅ Swagger documentation registered at /api/docs/")
-    
-    # Main RESTful API endpoints (tickets, users, etc.)
+    # Main RESTful API endpoints (tickets, users, etc.) - MUST BE FIRST
     from app.api import api_bp
     app.register_blueprint(api_bp, url_prefix='/api')
     print("✅ RESTful API routes registered")
+    
+    # Register Swagger documentation (after API to avoid conflicts)
+    from app.swagger import swagger_bp
+    app.register_blueprint(swagger_bp, url_prefix='/api/docs')
+    print("✅ Swagger documentation registered at /api/docs/")
     
     # Administrative endpoints (system management)
     from app.routes.admin import admin_bp
