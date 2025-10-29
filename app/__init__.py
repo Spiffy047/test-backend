@@ -130,7 +130,7 @@ def create_app(config_name='default'):
     def index():
         """API root endpoint - returns basic system information"""
         return {
-            'message': 'IT ServiceDesk API', 
+            'message': 'Hotfix ServiceDesk API', 
             'version': '2.0.0', 
             'status': 'healthy',
             'documentation': 'Contact system administrator for API documentation'

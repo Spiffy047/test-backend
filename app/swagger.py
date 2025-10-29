@@ -8,8 +8,8 @@ swagger_bp = Blueprint('swagger', __name__)
 api = Api(
     swagger_bp,
     version='1.0',
-    title='IT ServiceDesk API',
-    description='REST API for IT ServiceDesk ticket management system',
+    title='Hotfix ServiceDesk API',
+    description='REST API for Hotfix ServiceDesk ticket management system',
     doc='/docs/',
     authorizations={
         'Bearer': {
