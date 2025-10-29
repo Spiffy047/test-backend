@@ -67,13 +67,13 @@ def create_app(config_name='default'):
                 print("✅ Database tables initialized successfully")
                 print("💡 To seed database with sample data, run: python init_postgres_db.py")
                 
-                # Initialize configuration
+                # Initialize configuration tables (safe - won't affect existing data)
                 try:
-                    from app.services.configuration_service import ConfigurationService
-                    ConfigurationService.initialize_default_configuration()
-                    print("✅ Configuration initialized successfully")
+                    from app.services.config_service import ConfigService
+                    ConfigService.init_config()
+                    print("✅ Configuration tables initialized")
                 except Exception as config_error:
-                    print(f"⚠️ Configuration initialization warning: {config_error}")
+                    print(f"⚠️ Configuration init warning: {config_error}")
             except Exception as e:
                 print(f"⚠️ Database table creation error: {e}")
                 
@@ -105,6 +105,11 @@ def create_app(config_name='default'):
     # === BLUEPRINT REGISTRATION ===
     # Register all route blueprints with appropriate URL prefixes
     
+    # Configuration management
+    from app.routes.config import config_bp
+    app.register_blueprint(config_bp, url_prefix='/api/config')
+    print("✅ Configuration routes registered")
+    
     # Register Swagger documentation
     from app.swagger import swagger_bp
     app.register_blueprint(swagger_bp, url_prefix='/api')
@@ -119,36 +124,6 @@ def create_app(config_name='default'):
     from app.routes.admin import admin_bp
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
     print(" Admin routes registered")
-    
-    # Database seeding endpoint
-    from app.routes.seed import seed_bp
-    app.register_blueprint(seed_bp, url_prefix='/api/admin')
-    print(" Seed routes registered")
-    
-    # Production seeding endpoint
-    from app.routes.production_seed import production_seed_bp
-    app.register_blueprint(production_seed_bp, url_prefix='/api/admin')
-    print(" Production seed routes registered")
-    
-    # Test database endpoint
-    from app.routes.test_db import test_db_bp
-    app.register_blueprint(test_db_bp, url_prefix='/api')
-    print(" Test DB routes registered")
-    
-    # Test auth endpoint
-    from app.routes.test_auth import test_auth_bp
-    app.register_blueprint(test_auth_bp, url_prefix='/api')
-    print(" Test auth routes registered")
-    
-    # Test ORM endpoint
-    from app.routes.test_orm import test_orm_bp
-    app.register_blueprint(test_orm_bp, url_prefix='/api')
-    print(" Test ORM routes registered")
-    
-    # Configuration management endpoints
-    from app.routes.configuration import config_bp
-    app.register_blueprint(config_bp, url_prefix='/api/config')
-    print(" Configuration routes registered")
     
     # File upload/download endpoints (with fallback to built-in)
     try:
@@ -532,7 +507,9 @@ def create_app(config_name='default'):
                     'type': 'message'
                 })
             
-            # Messages are now fully from database
+            # Add any new messages from memory store
+            if ticket_id in messages_store:
+                messages.extend(messages_store[ticket_id])
             
             return messages
         except Exception as e:
@@ -571,34 +548,16 @@ def create_app(config_name='default'):
     
     @app.route('/api/files/ticket/<ticket_id>')
     def ticket_files(ticket_id):
-        try:
-            from sqlalchemy import text
-            
-            # Get files from database
-            result = db.session.execute(text("""
-                SELECT id, filename, file_size, mime_type, uploaded_by, uploaded_at
-                FROM file_attachments 
-                WHERE ticket_id = (SELECT id FROM tickets WHERE ticket_id = :ticket_id)
-                ORDER BY uploaded_at DESC
-            """), {'ticket_id': ticket_id})
-            
-            files = []
-            for row in result:
-                files.append({
-                    'id': row[0],
-                    'filename': row[1],
-                    'file_size': row[2],
-                    'mime_type': row[3],
-                    'uploaded_by': row[4],
-                    'uploaded_at': row[5].isoformat() + 'Z' if row[5] else None
-                })
-            
-            return files
-        except Exception as e:
-            print(f"Error fetching files for ticket {ticket_id}: {e}")
-            return []
+        files = []
+        
+        # Add any uploaded files for this ticket from memory store
+        if ticket_id in uploaded_files:
+            files.extend(uploaded_files[ticket_id])
+        
+        return files
     
-    # File storage moved to database
+    # File storage for uploaded files
+    uploaded_files = {}
     
     @app.route('/api/files/upload', methods=['POST', 'OPTIONS'])
     def upload_file():
@@ -635,88 +594,63 @@ def create_app(config_name='default'):
             # Reset file pointer
             file.seek(0)
             
-            # Store file info in database
-            from sqlalchemy import text
+            # Store file info in memory (in production, save to cloud storage)
             import uuid
             file_id = str(uuid.uuid4())
-            file_size_mb = round(file_size / (1024 * 1024), 2)
-            
-            try:
-                # Insert file record into database
-                db.session.execute(text("""
-                    INSERT INTO file_attachments (id, filename, file_size, mime_type, ticket_id, uploaded_by, uploaded_at)
-                    VALUES (:id, :filename, :file_size, :mime_type, :ticket_id, :uploaded_by, :uploaded_at)
-                """), {
-                    'id': file_id,
-                    'filename': file.filename,
-                    'file_size': file_size,
-                    'mime_type': file.content_type or 'application/octet-stream',
-                    'ticket_id': ticket_id,
-                    'uploaded_by': uploaded_by,
-                    'uploaded_at': datetime.utcnow()
-                })
-                
-                # Add file upload message to database
-                db.session.execute(text("""
-                    INSERT INTO messages (ticket_id, sender_id, message, created_at)
-                    VALUES ((SELECT id FROM tickets WHERE ticket_id = :ticket_id), :sender_id, :message, :created_at)
-                """), {
-                    'ticket_id': ticket_id,
-                    'sender_id': uploaded_by,
-                    'message': f'Uploaded file: {file.filename} ({file_size_mb} MB)',
-                    'created_at': datetime.utcnow()
-                })
-                
-                db.session.commit()
-            except Exception as db_error:
-                db.session.rollback()
-                print(f"Database error: {db_error}")
-                # Continue with response even if DB fails
-            
-            return {
+            file_info = {
                 'id': file_id,
                 'filename': file.filename,
-                'file_size_mb': file_size_mb,
-                'uploaded_at': datetime.utcnow().isoformat() + 'Z'
+                'file_size_mb': round(file_size / (1024 * 1024), 2),
+                'ticket_id': ticket_id,
+                'uploaded_by': uploaded_by,
+                'download_url': f'/api/files/download/{file_id}',
+                'uploaded_at': datetime.utcnow().isoformat() + 'Z',
+                'content': file_content  # Store content in memory for demo
+            }
+            
+            if ticket_id not in uploaded_files:
+                uploaded_files[ticket_id] = []
+            uploaded_files[ticket_id].append(file_info)
+            
+            # Add file upload to timeline
+            if ticket_id not in messages_store:
+                messages_store[ticket_id] = []
+            
+            upload_message = {
+                'id': f'file_msg_{len(messages_store[ticket_id]) + 100}',
+                'ticket_id': ticket_id,
+                'sender_id': uploaded_by,
+                'sender_name': 'User',
+                'sender_role': 'Normal User',
+                'message': f'Uploaded file: {file.filename} ({file_info["file_size_mb"]} MB)',
+                'timestamp': datetime.utcnow().isoformat() + 'Z',
+                'type': 'file_upload'
+            }
+            messages_store[ticket_id].append(upload_message)
+            
+            return {
+                'id': file_info['id'],
+                'filename': file_info['filename'],
+                'file_size_mb': file_info['file_size_mb'],
+                'uploaded_at': file_info['uploaded_at']
             }, 200
             
         except Exception as e:
             print(f"File upload error: {e}")
             return {'error': str(e)}, 500
     
-    # Messages now stored in database
+    # Global message storage per ticket (in production, use database)
+    messages_store = {}
     
     # Messages endpoint moved to Flask-RESTful resources
     
     @app.route('/api/alerts/<alert_id>/read', methods=['PUT'])
     def mark_alert_read(alert_id):
-        try:
-            from sqlalchemy import text
-            
-            db.session.execute(text("""
-                UPDATE alerts SET is_read = true WHERE id = :alert_id
-            """), {'alert_id': alert_id})
-            
-            db.session.commit()
-            return {'success': True, 'message': 'Alert marked as read'}
-        except Exception as e:
-            print(f"Error marking alert as read: {e}")
-            return {'success': False, 'message': 'Failed to mark alert as read'}, 500
+        return {'success': True, 'message': 'Alert marked as read'}
     
     @app.route('/api/alerts/<user_id>/read-all', methods=['PUT'])
     def mark_all_alerts_read(user_id):
-        try:
-            from sqlalchemy import text
-            
-            db.session.execute(text("""
-                UPDATE alerts SET is_read = true WHERE user_id = :user_id
-            """), {'user_id': user_id})
-            
-            db.session.commit()
-            return {'success': True, 'message': 'All alerts marked as read'}
-        except Exception as e:
-            print(f"Error marking all alerts as read: {e}")
-            return {'success': False, 'message': 'Failed to mark alerts as read'}, 500
+        return {'success': True, 'message': 'All alerts marked as read'}
     
     @app.route('/api/analytics/ticket-aging')
     def ticket_aging():
@@ -884,7 +818,11 @@ def create_app(config_name='default'):
                 headers={'Content-Disposition': 'attachment; filename=tickets.csv'}
             )
     
-    # Tickets now stored in database
+    # Global ticket storage (in production, use database)
+    tickets_store = []
+    
+    # Global counter for new tickets
+    ticket_counter = 5000
     
     # Tickets endpoint moved to Flask-RESTful resources
     
@@ -930,33 +868,19 @@ def create_app(config_name='default'):
     
     @app.route('/api/files/download/<file_id>')
     def download_file(file_id):
-        try:
-            from sqlalchemy import text
-            
-            # Get file info from database
-            result = db.session.execute(text("""
-                SELECT filename FROM file_attachments WHERE id = :file_id
-            """), {'file_id': file_id})
-            
-            file_row = result.fetchone()
-            if not file_row:
-                return {'error': 'File not found'}, 404
-            
-            filename = file_row[0]
-            
-            # In production, stream from cloud storage using file_path
-            # For now, return a placeholder response
-            return Response(
-                b'File content would be streamed from cloud storage',
-                mimetype='application/octet-stream',
-                headers={
-                    'Content-Disposition': f'attachment; filename="{filename}"'
-                }
-            )
-            
-        except Exception as e:
-            print(f"Error downloading file {file_id}: {e}")
-            return {'error': 'File download failed'}, 500
+        # Find file in uploaded_files
+        for ticket_id, files in uploaded_files.items():
+            for file_info in files:
+                if file_info['id'] == file_id:
+                    # Return file content (in production, stream from cloud storage)
+                    return Response(
+                        file_info.get('content', b'File content not available'),
+                        mimetype='application/octet-stream',
+                        headers={
+                            'Content-Disposition': f'attachment; filename="{file_info["filename"]}"'
+                        }
+                    )
+        return {'error': 'File not found'}, 404
     
     @app.route('/api/sla/realtime-adherence')
     def realtime_sla_adherence():
