@@ -597,45 +597,49 @@ def create_app(config_name='default'):
             # Reset file pointer
             file.seek(0)
             
-            # Store file info in memory (in production, save to cloud storage)
+            # Store file info in database
+            from sqlalchemy import text
             import uuid
             file_id = str(uuid.uuid4())
-            file_info = {
-                'id': file_id,
-                'filename': file.filename,
-                'file_size_mb': round(file_size / (1024 * 1024), 2),
-                'ticket_id': ticket_id,
-                'uploaded_by': uploaded_by,
-                'download_url': f'/api/files/download/{file_id}',
-                'uploaded_at': datetime.utcnow().isoformat() + 'Z',
-                'content': file_content  # Store content in memory for demo
-            }
+            file_size_mb = round(file_size / (1024 * 1024), 2)
             
-            if ticket_id not in uploaded_files:
-                uploaded_files[ticket_id] = []
-            uploaded_files[ticket_id].append(file_info)
-            
-            # Add file upload to timeline
-            if ticket_id not in messages_store:
-                messages_store[ticket_id] = []
-            
-            upload_message = {
-                'id': f'file_msg_{len(messages_store[ticket_id]) + 100}',
-                'ticket_id': ticket_id,
-                'sender_id': uploaded_by,
-                'sender_name': 'User',
-                'sender_role': 'Normal User',
-                'message': f'Uploaded file: {file.filename} ({file_info["file_size_mb"]} MB)',
-                'timestamp': datetime.utcnow().isoformat() + 'Z',
-                'type': 'file_upload'
-            }
-            messages_store[ticket_id].append(upload_message)
+            try:
+                # Insert file record into database
+                db.session.execute(text("""
+                    INSERT INTO attachments (id, filename, file_path, file_size, ticket_id, uploaded_by, uploaded_at)
+                    VALUES (:id, :filename, :file_path, :file_size, :ticket_id, :uploaded_by, :uploaded_at)
+                """), {
+                    'id': file_id,
+                    'filename': file.filename,
+                    'file_path': f'/uploads/{file_id}_{file.filename}',
+                    'file_size': file_size,
+                    'ticket_id': ticket_id,
+                    'uploaded_by': uploaded_by,
+                    'uploaded_at': datetime.utcnow()
+                })
+                
+                # Add file upload message to database
+                db.session.execute(text("""
+                    INSERT INTO messages (ticket_id, sender_id, message, created_at)
+                    VALUES ((SELECT id FROM tickets WHERE ticket_id = :ticket_id), :sender_id, :message, :created_at)
+                """), {
+                    'ticket_id': ticket_id,
+                    'sender_id': uploaded_by,
+                    'message': f'Uploaded file: {file.filename} ({file_size_mb} MB)',
+                    'created_at': datetime.utcnow()
+                })
+                
+                db.session.commit()
+            except Exception as db_error:
+                db.session.rollback()
+                print(f"Database error: {db_error}")
+                # Continue with response even if DB fails
             
             return {
-                'id': file_info['id'],
-                'filename': file_info['filename'],
-                'file_size_mb': file_info['file_size_mb'],
-                'uploaded_at': file_info['uploaded_at']
+                'id': file_id,
+                'filename': file.filename,
+                'file_size_mb': file_size_mb,
+                'uploaded_at': datetime.utcnow().isoformat() + 'Z'
             }, 200
             
         except Exception as e:
