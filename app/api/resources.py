@@ -72,7 +72,23 @@ class TicketListResource(Resource):
     
     def post(self):
         try:
-            data = ticket_schema.load(request.get_json())
+            # Handle both JSON and form data (for attachments)
+            if request.content_type and 'multipart/form-data' in request.content_type:
+                # Form data with potential file upload
+                data = {
+                    'title': request.form.get('title'),
+                    'description': request.form.get('description'),
+                    'priority': request.form.get('priority'),
+                    'category': request.form.get('category'),
+                    'created_by': int(request.form.get('created_by'))
+                }
+            else:
+                # JSON data
+                data = ticket_schema.load(request.get_json())
+            
+            # Validate required fields
+            if not all([data.get('title'), data.get('description'), data.get('priority'), data.get('category'), data.get('created_by')]):
+                return {'error': 'Missing required fields'}, 400
             
             # Get the highest ticket number from existing ticket_ids
             last_ticket = Ticket.query.filter(Ticket.ticket_id.like('TKT-%')).order_by(Ticket.ticket_id.desc()).first()
@@ -101,6 +117,27 @@ class TicketListResource(Resource):
             db.session.add(ticket)
             db.session.commit()
             
+            # Handle file attachment if present
+            if 'attachment' in request.files:
+                file = request.files['attachment']
+                if file and file.filename:
+                    try:
+                        from app.services.cloudinary_service import CloudinaryService
+                        cloudinary_service = CloudinaryService()
+                        result = cloudinary_service.upload_image(file, ticket.ticket_id, data['created_by'])
+                        
+                        if result:
+                            # Add attachment to timeline
+                            message = Message(
+                                ticket_id=ticket.id,
+                                sender_id=data['created_by'],
+                                message=f'Attached file: {file.filename} ({result.get("bytes", 0) // 1024} KB)'
+                            )
+                            db.session.add(message)
+                            db.session.commit()
+                    except Exception as e:
+                        print(f"Attachment upload failed: {e}")
+            
             # Send email notification
             try:
                 email_service = EmailService()
@@ -119,6 +156,8 @@ class TicketListResource(Resource):
             
         except ValidationError as e:
             return {'error': 'Validation error', 'messages': e.messages}, 400
+        except Exception as e:
+            return {'error': f'Ticket creation failed: {str(e)}'}, 500
 
 class TicketResource(Resource):
     def get(self, ticket_id):
