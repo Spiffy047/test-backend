@@ -247,20 +247,41 @@ class UserResource(Resource):
 
 class MessageListResource(Resource):
     def post(self):
-        data = request.get_json()
-        from datetime import datetime
-        
-        new_message = {
-            'id': f'msg_{len(data) + 100}',
-            'ticket_id': data.get('ticket_id'),
-            'sender_id': data.get('sender_id'),
-            'sender_name': data.get('sender_name'),
-            'sender_role': data.get('sender_role'),
-            'message': data.get('message'),
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
-            'type': 'message'
-        }
-        return new_message, 201
+        try:
+            data = request.get_json()
+            
+            # Get ticket internal ID
+            ticket = Ticket.query.filter_by(ticket_id=data.get('ticket_id')).first()
+            if not ticket:
+                return {'error': 'Ticket not found'}, 404
+            
+            # Create message in database
+            message = Message(
+                ticket_id=ticket.id,
+                sender_id=data.get('sender_id'),
+                message=data.get('message')
+            )
+            
+            db.session.add(message)
+            db.session.commit()
+            
+            # Get sender info
+            sender = User.query.get(data.get('sender_id'))
+            
+            return {
+                'id': message.id,
+                'ticket_id': data.get('ticket_id'),
+                'sender_id': message.sender_id,
+                'sender_name': sender.name if sender else 'Unknown User',
+                'sender_role': sender.role if sender else 'Normal User',
+                'message': message.message,
+                'timestamp': message.created_at.isoformat() + 'Z',
+                'type': 'message'
+            }, 201
+            
+        except Exception as e:
+            db.session.rollback()
+            return {'error': f'Failed to create message: {str(e)}'}, 500
 
 class AnalyticsResource(Resource):
     def get(self, endpoint):

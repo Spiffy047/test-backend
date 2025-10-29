@@ -494,9 +494,7 @@ def create_app(config_name='default'):
                     'type': 'message'
                 })
             
-            # Add any new messages from memory store
-            if ticket_id in messages_store:
-                messages.extend(messages_store[ticket_id])
+            # Messages are now fully from database
             
             return messages
         except Exception as e:
@@ -535,16 +533,34 @@ def create_app(config_name='default'):
     
     @app.route('/api/files/ticket/<ticket_id>')
     def ticket_files(ticket_id):
-        files = []
-        
-        # Add any uploaded files for this ticket from memory store
-        if ticket_id in uploaded_files:
-            files.extend(uploaded_files[ticket_id])
-        
-        return files
+        try:
+            from sqlalchemy import text
+            
+            # Get files from database
+            result = db.session.execute(text("""
+                SELECT id, filename, file_path, file_size, uploaded_by, uploaded_at
+                FROM attachments 
+                WHERE ticket_id = (SELECT id FROM tickets WHERE ticket_id = :ticket_id)
+                ORDER BY uploaded_at DESC
+            """), {'ticket_id': ticket_id})
+            
+            files = []
+            for row in result:
+                files.append({
+                    'id': row[0],
+                    'filename': row[1],
+                    'file_path': row[2],
+                    'file_size': row[3],
+                    'uploaded_by': row[4],
+                    'uploaded_at': row[5].isoformat() + 'Z' if row[5] else None
+                })
+            
+            return files
+        except Exception as e:
+            print(f"Error fetching files for ticket {ticket_id}: {e}")
+            return []
     
-    # File storage for uploaded files
-    uploaded_files = {}
+    # File storage moved to database
     
     @app.route('/api/files/upload', methods=['POST', 'OPTIONS'])
     def upload_file():
@@ -626,18 +642,39 @@ def create_app(config_name='default'):
             print(f"File upload error: {e}")
             return {'error': str(e)}, 500
     
-    # Global message storage per ticket (in production, use database)
-    messages_store = {}
+    # Messages now stored in database
     
     # Messages endpoint moved to Flask-RESTful resources
     
     @app.route('/api/alerts/<alert_id>/read', methods=['PUT'])
     def mark_alert_read(alert_id):
-        return {'success': True, 'message': 'Alert marked as read'}
+        try:
+            from sqlalchemy import text
+            
+            db.session.execute(text("""
+                UPDATE alerts SET is_read = true WHERE id = :alert_id
+            """), {'alert_id': alert_id})
+            
+            db.session.commit()
+            return {'success': True, 'message': 'Alert marked as read'}
+        except Exception as e:
+            print(f"Error marking alert as read: {e}")
+            return {'success': False, 'message': 'Failed to mark alert as read'}, 500
     
     @app.route('/api/alerts/<user_id>/read-all', methods=['PUT'])
     def mark_all_alerts_read(user_id):
-        return {'success': True, 'message': 'All alerts marked as read'}
+        try:
+            from sqlalchemy import text
+            
+            db.session.execute(text("""
+                UPDATE alerts SET is_read = true WHERE user_id = :user_id
+            """), {'user_id': user_id})
+            
+            db.session.commit()
+            return {'success': True, 'message': 'All alerts marked as read'}
+        except Exception as e:
+            print(f"Error marking all alerts as read: {e}")
+            return {'success': False, 'message': 'Failed to mark alerts as read'}, 500
     
     @app.route('/api/analytics/ticket-aging')
     def ticket_aging():
@@ -805,11 +842,7 @@ def create_app(config_name='default'):
                 headers={'Content-Disposition': 'attachment; filename=tickets.csv'}
             )
     
-    # Global ticket storage (in production, use database)
-    tickets_store = []
-    
-    # Global counter for new tickets
-    ticket_counter = 5000
+    # Tickets now stored in database
     
     # Tickets endpoint moved to Flask-RESTful resources
     
@@ -855,19 +888,34 @@ def create_app(config_name='default'):
     
     @app.route('/api/files/download/<file_id>')
     def download_file(file_id):
-        # Find file in uploaded_files
-        for ticket_id, files in uploaded_files.items():
-            for file_info in files:
-                if file_info['id'] == file_id:
-                    # Return file content (in production, stream from cloud storage)
-                    return Response(
-                        file_info.get('content', b'File content not available'),
-                        mimetype='application/octet-stream',
-                        headers={
-                            'Content-Disposition': f'attachment; filename="{file_info["filename"]}"'
-                        }
-                    )
-        return {'error': 'File not found'}, 404
+        try:
+            from sqlalchemy import text
+            
+            # Get file info from database
+            result = db.session.execute(text("""
+                SELECT filename, file_path FROM attachments WHERE id = :file_id
+            """), {'file_id': file_id})
+            
+            file_row = result.fetchone()
+            if not file_row:
+                return {'error': 'File not found'}, 404
+            
+            filename = file_row[0]
+            file_path = file_row[1]
+            
+            # In production, stream from cloud storage using file_path
+            # For now, return a placeholder response
+            return Response(
+                b'File content would be streamed from cloud storage',
+                mimetype='application/octet-stream',
+                headers={
+                    'Content-Disposition': f'attachment; filename="{filename}"'
+                }
+            )
+            
+        except Exception as e:
+            print(f"Error downloading file {file_id}: {e}")
+            return {'error': 'File download failed'}, 500
     
     @app.route('/api/sla/realtime-adherence')
     def realtime_sla_adherence():
