@@ -538,8 +538,8 @@ def create_app(config_name='default'):
             
             # Get files from database
             result = db.session.execute(text("""
-                SELECT id, filename, file_path, file_size, uploaded_by, uploaded_at
-                FROM attachments 
+                SELECT id, filename, file_size, mime_type, uploaded_by, uploaded_at
+                FROM file_attachments 
                 WHERE ticket_id = (SELECT id FROM tickets WHERE ticket_id = :ticket_id)
                 ORDER BY uploaded_at DESC
             """), {'ticket_id': ticket_id})
@@ -549,8 +549,8 @@ def create_app(config_name='default'):
                 files.append({
                     'id': row[0],
                     'filename': row[1],
-                    'file_path': row[2],
-                    'file_size': row[3],
+                    'file_size': row[2],
+                    'mime_type': row[3],
                     'uploaded_by': row[4],
                     'uploaded_at': row[5].isoformat() + 'Z' if row[5] else None
                 })
@@ -606,13 +606,13 @@ def create_app(config_name='default'):
             try:
                 # Insert file record into database
                 db.session.execute(text("""
-                    INSERT INTO attachments (id, filename, file_path, file_size, ticket_id, uploaded_by, uploaded_at)
-                    VALUES (:id, :filename, :file_path, :file_size, :ticket_id, :uploaded_by, :uploaded_at)
+                    INSERT INTO file_attachments (id, filename, file_size, mime_type, ticket_id, uploaded_by, uploaded_at)
+                    VALUES (:id, :filename, :file_size, :mime_type, :ticket_id, :uploaded_by, :uploaded_at)
                 """), {
                     'id': file_id,
                     'filename': file.filename,
-                    'file_path': f'/uploads/{file_id}_{file.filename}',
                     'file_size': file_size,
+                    'mime_type': file.content_type or 'application/octet-stream',
                     'ticket_id': ticket_id,
                     'uploaded_by': uploaded_by,
                     'uploaded_at': datetime.utcnow()
@@ -897,7 +897,7 @@ def create_app(config_name='default'):
             
             # Get file info from database
             result = db.session.execute(text("""
-                SELECT filename, file_path FROM attachments WHERE id = :file_id
+                SELECT filename FROM file_attachments WHERE id = :file_id
             """), {'file_id': file_id})
             
             file_row = result.fetchone()
@@ -905,7 +905,6 @@ def create_app(config_name='default'):
                 return {'error': 'File not found'}, 404
             
             filename = file_row[0]
-            file_path = file_row[1]
             
             # In production, stream from cloud storage using file_path
             # For now, return a placeholder response
