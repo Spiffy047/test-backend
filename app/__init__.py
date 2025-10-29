@@ -127,6 +127,11 @@ def create_app(config_name='default'):
     app.register_blueprint(test_db_bp, url_prefix='/api')
     print(" Test DB routes registered")
     
+    # Test auth endpoint
+    from app.routes.test_auth import test_auth_bp
+    app.register_blueprint(test_auth_bp, url_prefix='/api')
+    print(" Test auth routes registered")
+    
     # File upload/download endpoints (with fallback to built-in)
     try:
         from app.routes.files import files_bp
