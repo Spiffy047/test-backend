@@ -1,8 +1,6 @@
 import os
 import cloudinary
 import cloudinary.uploader
-from PIL import Image
-import io
 
 class CloudinaryService:
     def __init__(self):
@@ -14,23 +12,12 @@ class CloudinaryService:
     
     def upload_image(self, file, ticket_id, user_id):
         try:
-            # Resize image before upload
-            image = Image.open(file)
+            # Reset file pointer
+            file.seek(0)
             
-            # Resize if larger than 1200px width
-            if image.width > 1200:
-                ratio = 1200 / image.width
-                new_height = int(image.height * ratio)
-                image = image.resize((1200, new_height), Image.Resampling.LANCZOS)
-            
-            # Convert to bytes
-            img_byte_arr = io.BytesIO()
-            image.save(img_byte_arr, format='JPEG', quality=85)
-            img_byte_arr.seek(0)
-            
-            # Upload to Cloudinary
+            # Upload directly without PIL processing to avoid dependency issues
             result = cloudinary.uploader.upload(
-                img_byte_arr,
+                file,
                 folder=f"servicedesk/tickets/{ticket_id}",
                 public_id=f"attachment_{user_id}_{ticket_id}",
                 resource_type="image",
