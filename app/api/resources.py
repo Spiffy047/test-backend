@@ -13,9 +13,6 @@ from app.services.email_service import EmailService
 class AuthResource(Resource):
     def post(self):
         try:
-            from werkzeug.security import check_password_hash
-            from sqlalchemy import text
-            
             data = request.get_json()
             email = data.get('email')
             password = data.get('password')
@@ -23,24 +20,18 @@ class AuthResource(Resource):
             if not email or not password:
                 return {'success': False, 'message': 'Email and password required'}, 400
             
-            # Find user using direct SQL
-            result = db.session.execute(text("""
-                SELECT id, name, email, password_hash, role 
-                FROM users 
-                WHERE email = :email AND is_verified = true
-            """), {'email': email})
+            # Find user using ORM
+            user = User.query.filter_by(email=email, is_verified=True).first()
             
-            user_row = result.fetchone()
-            
-            if user_row and check_password_hash(user_row[3], password):
-                access_token = create_access_token(identity=user_row[0])
+            if user and user.check_password(password):
+                access_token = create_access_token(identity=user.id)
                 return {
                     'success': True,
                     'user': {
-                        'id': user_row[0],
-                        'name': user_row[1],
-                        'email': user_row[2],
-                        'role': user_row[4]
+                        'id': user.id,
+                        'name': user.name,
+                        'email': user.email,
+                        'role': user.role
                     },
                     'access_token': access_token
                 }

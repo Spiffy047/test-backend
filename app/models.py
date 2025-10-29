@@ -7,6 +7,9 @@ from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import func
 
+# Import configuration models
+from app.models.configuration import UserRole, TicketStatus, TicketPriority, TicketCategory, AlertType, SystemSetting
+
 class User(db.Model):
     """User model for authentication and role management
     
@@ -25,7 +28,8 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)  # Hashed password for security
     
     # Role-based access control
-    role = db.Column(db.String(50), nullable=False, default='Normal User')
+    role_id = db.Column(db.Integer, db.ForeignKey('user_roles.id'), nullable=False)
+    role = db.relationship('UserRole', backref='users')
     
     # Email verification system
     is_verified = db.Column(db.Boolean, default=True, nullable=True)  # Email verification status
@@ -98,9 +102,14 @@ class Ticket(db.Model):
     description = db.Column(db.Text, nullable=False)  # Detailed problem description
     
     # Ticket classification
-    status = db.Column(db.String(20), nullable=False, default='New')  # Current status
-    priority = db.Column(db.String(20), nullable=False)  # Critical/High/Medium/Low
-    category = db.Column(db.String(50), nullable=False)  # Hardware/Software/Network/etc
+    status_id = db.Column(db.Integer, db.ForeignKey('ticket_statuses.id'), nullable=False)
+    priority_id = db.Column(db.Integer, db.ForeignKey('ticket_priorities.id'), nullable=False)
+    category_id = db.Column(db.Integer, db.ForeignKey('ticket_categories.id'), nullable=False)
+    
+    # Relationships
+    status = db.relationship('TicketStatus', backref='tickets')
+    priority = db.relationship('TicketPriority', backref='tickets')
+    category = db.relationship('TicketCategory', backref='tickets')
     
     # Assignment and ownership
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)  # Ticket creator
@@ -135,19 +144,12 @@ class Ticket(db.Model):
     def check_sla_violation(self):
         """Check if ticket has exceeded SLA time limits based on priority
         
-        SLA targets by priority:
-        - Critical: 4 hours (urgent system outages)
-        - High: 8 hours (significant impact)
-        - Medium: 24 hours (standard issues)
-        - Low: 72 hours (minor requests)
+        Uses dynamic SLA targets from TicketPriority model
         """
-        sla_targets = {
-            'Critical': 4,   # 4 hours - urgent system issues
-            'High': 8,       # 8 hours - high impact problems
-            'Medium': 24,    # 24 hours - standard support
-            'Low': 72        # 72 hours - low priority requests
-        }
-        target_hours = sla_targets.get(self.priority, 24)  # Default to 24 hours
+        if not self.priority:
+            return False
+        
+        target_hours = self.priority.sla_hours
         return self.hours_open > target_hours
     
     def __repr__(self):
@@ -190,9 +192,12 @@ class Alert(db.Model):
     ticket_id = db.Column(db.Integer, db.ForeignKey('tickets.id'), nullable=False)  # Related ticket
     
     # Alert classification and content
-    alert_type = db.Column(db.String(50), nullable=False)  # Type: assignment, sla_violation, etc.
+    alert_type_id = db.Column(db.Integer, db.ForeignKey('alert_types.id'), nullable=False)
     title = db.Column(db.String(200), nullable=False)  # Brief alert title
     message = db.Column(db.Text, nullable=False)  # Detailed alert message
+    
+    # Relationships
+    alert_type = db.relationship('AlertType', backref='alerts')
     
     # Alert state and timing
     is_read = db.Column(db.Boolean, default=False)  # Whether user has seen the alert

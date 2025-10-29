@@ -4,6 +4,7 @@ from app.models import Ticket
 from app.schemas.ticket_schema import ticket_schema, tickets_schema
 from app.services.assignment_service import AssignmentService
 from app.services.notification_service import NotificationService
+from app.services.configuration_service import ConfigurationService
 from datetime import datetime
 import uuid
 
@@ -20,9 +21,13 @@ def get_tickets():
     query = Ticket.query
     
     if status:
-        query = query.filter(Ticket.status == status)
+        status_obj = ConfigurationService.get_status_by_name(status)
+        if status_obj:
+            query = query.filter(Ticket.status_id == status_obj.id)
     if priority:
-        query = query.filter(Ticket.priority == priority)
+        priority_obj = ConfigurationService.get_priority_by_name(priority)
+        if priority_obj:
+            query = query.filter(Ticket.priority_id == priority_obj.id)
     if assigned_to:
         query = query.filter(Ticket.assigned_to == assigned_to)
     if created_by:
@@ -32,7 +37,7 @@ def get_tickets():
     
     # Real-time SLA violation check for open tickets
     for ticket in tickets:
-        if ticket.status != 'Closed':
+        if not (ticket.status and ticket.status.is_closed_status):
             ticket.sla_violated = ticket.check_sla_violation()
     
     db.session.commit()
@@ -45,7 +50,7 @@ def get_ticket(ticket_id):
     ticket = Ticket.query.get_or_404(ticket_id)
     
     # Update SLA violation status
-    if ticket.status != 'Closed':
+    if not (ticket.status and ticket.status.is_closed_status):
         ticket.sla_violated = ticket.check_sla_violation()
         db.session.commit()
     
@@ -61,12 +66,21 @@ def create_ticket():
     ticket_number = result.scalar()
     ticket_id = f"TKT-{ticket_number:04d}"
     
+    # Get configuration objects
+    priority = ConfigurationService.get_priority_by_name(data.get('priority', 'Medium'))
+    category = ConfigurationService.get_category_by_name(data['category'])
+    status = ConfigurationService.get_default_status()
+    
+    if not priority or not category or not status:
+        return jsonify({'error': 'Invalid priority, category, or status'}), 400
+    
     ticket = Ticket(
-        id=ticket_id,
+        ticket_id=ticket_id,
         title=data['title'],
         description=data['description'],
-        priority=data.get('priority', 'Medium'),
-        category=data['category'],
+        priority_id=priority.id,
+        category_id=category.id,
+        status_id=status.id,
         created_by=data['created_by']
     )
     
@@ -93,17 +107,36 @@ def update_ticket(ticket_id):
     old_priority = ticket.priority
     old_assigned_to = ticket.assigned_to
     
-    # Update fields
-    for field in ['title', 'description', 'status', 'priority', 'assigned_to', 'category']:
+    # Update basic fields
+    for field in ['title', 'description', 'assigned_to']:
         if field in data:
             setattr(ticket, field, data[field])
     
+    # Update configuration-based fields
+    if 'status' in data:
+        status_obj = ConfigurationService.get_status_by_name(data['status'])
+        if status_obj:
+            ticket.status_id = status_obj.id
+    
+    if 'priority' in data:
+        priority_obj = ConfigurationService.get_priority_by_name(data['priority'])
+        if priority_obj:
+            ticket.priority_id = priority_obj.id
+    
+    if 'category' in data:
+        category_obj = ConfigurationService.get_category_by_name(data['category'])
+        if category_obj:
+            ticket.category_id = category_obj.id
+    
     ticket.updated_at = datetime.utcnow()
     
-    # Handle status change to Closed
-    if data.get('status') == 'Closed' and old_status != 'Closed':
+    # Handle status change to closed status
+    new_status = ticket.status
+    old_status_closed = old_status and hasattr(old_status, 'is_closed_status') and old_status.is_closed_status
+    new_status_closed = new_status and new_status.is_closed_status
+    
+    if new_status_closed and not old_status_closed:
         ticket.resolved_at = datetime.utcnow()
-        ticket.resolution_time_hours = (ticket.resolved_at - ticket.created_at).total_seconds() / 3600
     
     # Log activities for changes and send notifications
     activities = []

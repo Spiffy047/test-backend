@@ -66,6 +66,14 @@ def create_app(config_name='default'):
                 db.create_all()
                 print("✅ Database tables initialized successfully")
                 print("💡 To seed database with sample data, run: python init_postgres_db.py")
+                
+                # Initialize configuration
+                try:
+                    from app.services.configuration_service import ConfigurationService
+                    ConfigurationService.initialize_default_configuration()
+                    print("✅ Configuration initialized successfully")
+                except Exception as config_error:
+                    print(f"⚠️ Configuration initialization warning: {config_error}")
             except Exception as e:
                 print(f"⚠️ Database table creation error: {e}")
                 
@@ -131,6 +139,16 @@ def create_app(config_name='default'):
     from app.routes.test_auth import test_auth_bp
     app.register_blueprint(test_auth_bp, url_prefix='/api')
     print(" Test auth routes registered")
+    
+    # Test ORM endpoint
+    from app.routes.test_orm import test_orm_bp
+    app.register_blueprint(test_orm_bp, url_prefix='/api')
+    print(" Test ORM routes registered")
+    
+    # Configuration management endpoints
+    from app.routes.configuration import config_bp
+    app.register_blueprint(config_bp, url_prefix='/api/config')
+    print(" Configuration routes registered")
     
     # File upload/download endpoints (with fallback to built-in)
     try:
