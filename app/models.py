@@ -135,19 +135,11 @@ class Ticket(db.Model):
     def check_sla_violation(self):
         """Check if ticket has exceeded SLA time limits based on priority
         
-        SLA targets by priority:
-        - Critical: 4 hours (urgent system outages)
-        - High: 8 hours (significant impact)
-        - Medium: 24 hours (standard issues)
-        - Low: 72 hours (minor requests)
+        Uses dynamic SLA targets from configuration if available,
+        falls back to hardcoded values for backward compatibility
         """
-        sla_targets = {
-            'Critical': 4,   # 4 hours - urgent system issues
-            'High': 8,       # 8 hours - high impact problems
-            'Medium': 24,    # 24 hours - standard support
-            'Low': 72        # 72 hours - low priority requests
-        }
-        target_hours = sla_targets.get(self.priority, 24)  # Default to 24 hours
+        from app.services.config_service import ConfigService
+        target_hours = ConfigService.get_sla_hours(self.priority)
         return self.hours_open > target_hours
     
     def __repr__(self):

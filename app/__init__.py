@@ -66,6 +66,14 @@ def create_app(config_name='default'):
                 db.create_all()
                 print("✅ Database tables initialized successfully")
                 print("💡 To seed database with sample data, run: python init_postgres_db.py")
+                
+                # Initialize configuration tables (safe - won't affect existing data)
+                try:
+                    from app.services.config_service import ConfigService
+                    ConfigService.init_config()
+                    print("✅ Configuration tables initialized")
+                except Exception as config_error:
+                    print(f"⚠️ Configuration init warning: {config_error}")
             except Exception as e:
                 print(f"⚠️ Database table creation error: {e}")
                 
@@ -96,6 +104,11 @@ def create_app(config_name='default'):
     
     # === BLUEPRINT REGISTRATION ===
     # Register all route blueprints with appropriate URL prefixes
+    
+    # Configuration management
+    from app.routes.config import config_bp
+    app.register_blueprint(config_bp, url_prefix='/api/config')
+    print("✅ Configuration routes registered")
     
     # Register Swagger documentation
     from app.swagger import swagger_bp
