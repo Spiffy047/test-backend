@@ -208,44 +208,70 @@ def create_app(config_name='default'):
     
     @app.route('/api/agents/performance')
     def agent_performance():
-        """Get basic agent performance metrics (legacy endpoint)
-        
-        Returns sample performance data for dashboard compatibility.
-        Note: This endpoint provides fallback data. Use /api/agents/performance from agents blueprint for real data.
-        
-        Returns:
-            JSON array of agent performance objects
-        """
-        # Fallback data for compatibility - real implementation in agents blueprint
-        return [{
-            'id': 'agent1',
-            'name': 'Sarah Johnson',
-            'tickets_closed': 25,
-            'avg_handle_time': 4.2,
-            'sla_violations': 2,
-            'rating': 'Excellent'
-        }]
+        """Get basic agent performance metrics from database"""
+        try:
+            from sqlalchemy import text
+            
+            result = db.session.execute(text("""
+                SELECT 
+                    u.id, u.name, u.email,
+                    COUNT(CASE WHEN t.status IN ('Resolved', 'Closed') THEN 1 END) as tickets_closed,
+                    AVG(CASE WHEN t.status IN ('Resolved', 'Closed') AND t.resolved_at IS NOT NULL THEN 
+                        EXTRACT(EPOCH FROM (t.resolved_at - t.created_at))/3600 END) as avg_handle_time,
+                    COUNT(CASE WHEN t.sla_violated = true THEN 1 END) as sla_violations
+                FROM users u
+                LEFT JOIN tickets t ON u.id = t.assigned_to
+                WHERE u.role IN ('Technical User', 'Technical Supervisor')
+                GROUP BY u.id, u.name, u.email
+            """))
+            
+            agents = []
+            for row in result:
+                closed = row[3] or 0
+                violations = row[5] or 0
+                score = max(0, (closed * 10) - (violations * 5))
+                rating = 'Excellent' if score >= 50 else 'Good' if score >= 30 else 'Average' if score >= 15 else 'Needs Improvement'
+                
+                agents.append({
+                    'id': row[0],
+                    'name': row[1],
+                    'tickets_closed': closed,
+                    'avg_handle_time': round(row[4] or 0, 1),
+                    'sla_violations': violations,
+                    'rating': rating
+                })
+            
+            return agents
+        except Exception as e:
+            print(f"Error fetching agent performance: {e}")
+            return []
     
     @app.route('/api/agents')
     def agents_list():
-        """Get list of all agents (legacy endpoint)
-        
-        Returns sample agent data for dashboard compatibility.
-        Note: This endpoint provides fallback data. Use /api/agents blueprint for real data.
-        
-        Returns:
-            JSON array of agent objects
-        """
-        # Fallback data for compatibility - real implementation in agents blueprint
-        return [{
-            'id': 'agent1',
-            'name': 'Sarah Johnson',
-            'email': 'sarah.j@company.com'
-        }, {
-            'id': 'agent2', 
-            'name': 'Mike Chen',
-            'email': 'mike.c@company.com'
-        }]
+        """Get list of all agents from database"""
+        try:
+            from sqlalchemy import text
+            
+            result = db.session.execute(text("""
+                SELECT id, name, email, role
+                FROM users 
+                WHERE role IN ('Technical User', 'Technical Supervisor')
+                ORDER BY name
+            """))
+            
+            agents = []
+            for row in result:
+                agents.append({
+                    'id': row[0],
+                    'name': row[1],
+                    'email': row[2],
+                    'role': row[3]
+                })
+            
+            return agents
+        except Exception as e:
+            print(f"Error fetching agents: {e}")
+            return []
     
     @app.route('/api/analytics/ticket-status-counts')
     def ticket_status_counts():
@@ -472,31 +498,39 @@ def create_app(config_name='default'):
     
     @app.route('/api/tickets/<ticket_id>/activities')
     def ticket_activities(ticket_id):
-        return [{
-            'id': 'act1',
-            'ticket_id': ticket_id,
-            'description': 'Ticket assigned to Sarah Johnson',
-            'performed_by': 'system',
-            'performed_by_name': 'System',
-            'created_at': '2025-10-27T10:35:00Z'
-        }]
+        try:
+            from sqlalchemy import text
+            
+            # Get ticket creation activity
+            ticket_result = db.session.execute(text("""
+                SELECT t.created_at, u.name as creator_name
+                FROM tickets t
+                LEFT JOIN users u ON t.created_by = u.id
+                WHERE t.ticket_id = :ticket_id OR t.id = :ticket_id
+            """), {'ticket_id': ticket_id})
+            
+            activities = []
+            ticket_row = ticket_result.fetchone()
+            if ticket_row:
+                activities.append({
+                    'id': f'create_{ticket_id}',
+                    'ticket_id': ticket_id,
+                    'description': f'Ticket created by {ticket_row[1] or "Unknown User"}',
+                    'performed_by': 'system',
+                    'performed_by_name': 'System',
+                    'created_at': ticket_row[0].isoformat() + 'Z' if ticket_row[0] else None
+                })
+            
+            return activities
+        except Exception as e:
+            print(f"Error fetching activities for {ticket_id}: {e}")
+            return []
     
     @app.route('/api/files/ticket/<ticket_id>')
     def ticket_files(ticket_id):
         files = []
         
-        # Add sample attachment for TKT-1001
-        if ticket_id == 'TKT-1001':
-            files.append({
-                'id': 'file1',
-                'filename': 'error_screenshot.png',
-                'file_size_mb': '0.5',
-                'download_url': '/api/files/download/file1',
-                'uploaded_by': 'user1',
-                'uploaded_at': '2025-10-27T10:35:00Z'
-            })
-        
-        # Add any uploaded files for this ticket
+        # Add any uploaded files for this ticket from memory store
         if ticket_id in uploaded_files:
             files.extend(uploaded_files[ticket_id])
         
@@ -731,18 +765,38 @@ def create_app(config_name='default'):
     
     @app.route('/api/export/tickets/excel')
     def export_tickets():
-        # Return CSV data for Excel export
-        csv_data = '''ID,Title,Status,Priority,Category,Created,Assigned
-TKT-1001,Unable to access company email,Open,High,Email & Communication,2025-10-27,agent1
-TKT-1002,Laptop running very slow,New,Medium,Hardware,2025-10-27,
-TKT-1003,VPN connection issues,Pending,High,Network & Connectivity,2025-10-27,agent2'''
-        
-        from flask import Response
-        return Response(
-            csv_data,
-            mimetype='text/csv',
-            headers={'Content-Disposition': 'attachment; filename=tickets.csv'}
-        )
+        try:
+            from sqlalchemy import text
+            from flask import Response
+            
+            result = db.session.execute(text("""
+                SELECT t.ticket_id, t.title, t.status, t.priority, t.category, 
+                       t.created_at, u.name as assigned_name
+                FROM tickets t
+                LEFT JOIN users u ON t.assigned_to = u.id
+                ORDER BY t.created_at DESC
+            """))
+            
+            csv_lines = ['ID,Title,Status,Priority,Category,Created,Assigned']
+            for row in result:
+                created_date = row[5].strftime('%Y-%m-%d') if row[5] else ''
+                assigned_name = row[6] or ''
+                csv_lines.append(f'{row[0]},{row[1]},{row[2]},{row[3]},{row[4]},{created_date},{assigned_name}')
+            
+            csv_data = '\n'.join(csv_lines)
+            
+            return Response(
+                csv_data,
+                mimetype='text/csv',
+                headers={'Content-Disposition': 'attachment; filename=tickets.csv'}
+            )
+        except Exception as e:
+            print(f"Error exporting tickets: {e}")
+            return Response(
+                'ID,Title,Status,Priority,Category,Created,Assigned\n',
+                mimetype='text/csv',
+                headers={'Content-Disposition': 'attachment; filename=tickets.csv'}
+            )
     
     # Global ticket storage (in production, use database)
     tickets_store = []
@@ -810,69 +864,85 @@ TKT-1003,VPN connection issues,Pending,High,Network & Connectivity,2025-10-27,ag
     
     @app.route('/api/sla/realtime-adherence')
     def realtime_sla_adherence():
-        return {
-            'overall': {
-                'total_tickets': 125,
-                'closed_met_sla': 89,
-                'closed_violated_sla': 16,
-                'closed_adherence_percentage': 84.8,
-                'open_violated': 4,
-                'open_at_risk': 12
-            },
-            'priority_breakdown': {
-                'Critical': {
-                    'met_sla': 8,
-                    'violated_sla': 3,
-                    'adherence_percentage': 72.7,
-                    'target_hours': 4
-                },
-                'High': {
-                    'met_sla': 22,
-                    'violated_sla': 6,
-                    'adherence_percentage': 78.6,
-                    'target_hours': 8
-                },
-                'Medium': {
-                    'met_sla': 35,
-                    'violated_sla': 5,
-                    'adherence_percentage': 87.5,
-                    'target_hours': 24
-                },
-                'Low': {
-                    'met_sla': 24,
-                    'violated_sla': 2,
-                    'adherence_percentage': 92.3,
-                    'target_hours': 72
+        try:
+            from sqlalchemy import text
+            
+            # Overall stats
+            overall_result = db.session.execute(text("""
+                SELECT 
+                    COUNT(*) as total_tickets,
+                    COUNT(CASE WHEN status IN ('Resolved', 'Closed') AND sla_violated = false THEN 1 END) as closed_met_sla,
+                    COUNT(CASE WHEN status IN ('Resolved', 'Closed') AND sla_violated = true THEN 1 END) as closed_violated_sla,
+                    COUNT(CASE WHEN status NOT IN ('Resolved', 'Closed') AND sla_violated = true THEN 1 END) as open_violated
+                FROM tickets
+            """))
+            
+            overall_row = overall_result.fetchone()
+            total = overall_row[0] or 0
+            closed_met = overall_row[1] or 0
+            closed_violated = overall_row[2] or 0
+            open_violated = overall_row[3] or 0
+            
+            closed_total = closed_met + closed_violated
+            adherence_pct = (closed_met / closed_total * 100) if closed_total > 0 else 0
+            
+            # Priority breakdown
+            priority_result = db.session.execute(text("""
+                SELECT 
+                    priority,
+                    COUNT(CASE WHEN status IN ('Resolved', 'Closed') AND sla_violated = false THEN 1 END) as met_sla,
+                    COUNT(CASE WHEN status IN ('Resolved', 'Closed') AND sla_violated = true THEN 1 END) as violated_sla,
+                    AVG(CASE WHEN status IN ('Resolved', 'Closed') AND resolved_at IS NOT NULL THEN 
+                        EXTRACT(EPOCH FROM (resolved_at - created_at))/3600 END) as avg_resolution_hours
+                FROM tickets
+                WHERE priority IN ('Critical', 'High', 'Medium', 'Low')
+                GROUP BY priority
+            """))
+            
+            sla_targets = {'Critical': 4, 'High': 8, 'Medium': 24, 'Low': 72}
+            priority_breakdown = {}
+            average_resolution_times = {}
+            
+            for row in priority_result:
+                priority = row[0]
+                met = row[1] or 0
+                violated = row[2] or 0
+                avg_hours = row[3] or 0
+                total_priority = met + violated
+                
+                priority_breakdown[priority] = {
+                    'met_sla': met,
+                    'violated_sla': violated,
+                    'adherence_percentage': round((met / total_priority * 100) if total_priority > 0 else 0, 1),
+                    'target_hours': sla_targets[priority]
                 }
-            },
-            'average_resolution_times': {
-                'Critical': {
-                    'average_hours': 3.2,
-                    'target_hours': 4,
-                    'within_target': True
-                },
-                'High': {
-                    'average_hours': 9.1,
-                    'target_hours': 8,
-                    'within_target': False
-                },
-                'Medium': {
-                    'average_hours': 18.5,
-                    'target_hours': 24,
-                    'within_target': True
-                },
-                'Low': {
-                    'average_hours': 45.2,
-                    'target_hours': 72,
-                    'within_target': True
+                
+                average_resolution_times[priority] = {
+                    'average_hours': round(avg_hours, 1),
+                    'target_hours': sla_targets[priority],
+                    'within_target': avg_hours <= sla_targets[priority]
                 }
-            },
-            'sla_targets': {
-                'Critical': 4,
-                'High': 8,
-                'Medium': 24,
-                'Low': 72
+            
+            return {
+                'overall': {
+                    'total_tickets': total,
+                    'closed_met_sla': closed_met,
+                    'closed_violated_sla': closed_violated,
+                    'closed_adherence_percentage': round(adherence_pct, 1),
+                    'open_violated': open_violated,
+                    'open_at_risk': 0  # Would need additional logic to calculate
+                },
+                'priority_breakdown': priority_breakdown,
+                'average_resolution_times': average_resolution_times,
+                'sla_targets': sla_targets
             }
-        }
+        except Exception as e:
+            print(f"Error fetching SLA adherence: {e}")
+            return {
+                'overall': {'total_tickets': 0, 'closed_met_sla': 0, 'closed_violated_sla': 0, 'closed_adherence_percentage': 0, 'open_violated': 0, 'open_at_risk': 0},
+                'priority_breakdown': {},
+                'average_resolution_times': {},
+                'sla_targets': {'Critical': 4, 'High': 8, 'Medium': 24, 'Low': 72}
+            }
     
     return app
