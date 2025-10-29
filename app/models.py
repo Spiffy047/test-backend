@@ -17,6 +17,7 @@ class User(db.Model):
     - System Admin: Full system access
     """
     __tablename__ = 'users'
+    __table_args__ = {'extend_existing': True}
     
     # Primary key and basic info
     id = db.Column(db.Integer, primary_key=True)
@@ -38,6 +39,13 @@ class User(db.Model):
     assigned_tickets = db.relationship('Ticket', foreign_keys='Ticket.assigned_to', backref='assignee', lazy='dynamic')
     sent_messages = db.relationship('Message', backref='sender', lazy='dynamic')
     alerts = db.relationship('Alert', backref='user', lazy='dynamic')
+    
+    # Explicitly ignore non-existent columns
+    def __init__(self, **kwargs):
+        # Remove any non-existent columns from kwargs
+        kwargs.pop('verification_token', None)
+        kwargs.pop('token_expires_at', None)
+        super(User, self).__init__(**kwargs)
     
     # Password management methods
     def set_password(self, password):
