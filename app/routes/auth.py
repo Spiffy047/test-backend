@@ -1,7 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from app import db
-from app.models.auth import UserAuth
 from app.models import User
 from datetime import datetime
 
@@ -17,21 +16,14 @@ def login():
     if not email or not password:
         return jsonify({'error': 'Email and password required'}), 400
     
-    # Find user auth record
-    user_auth = UserAuth.query.filter_by(email=email, is_active=True).first()
+    # Find user record
+    user = User.query.filter_by(email=email).first()
     
-    if not user_auth or not user_auth.check_password(password):
+    if not user or not user.check_password(password):
         return jsonify({'error': 'Invalid credentials'}), 401
     
-    # Update last login
-    user_auth.last_login = datetime.utcnow()
-    db.session.commit()
-    
     # Create access token
-    access_token = create_access_token(identity=user_auth.user_id)
-    
-    # Get user details
-    user = User.query.get(user_auth.user_id)
+    access_token = create_access_token(identity=user.id)
     
     return jsonify({
         'access_token': access_token,
