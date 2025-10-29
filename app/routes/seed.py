@@ -13,11 +13,18 @@ seed_bp = Blueprint('seed', __name__)
 def comprehensive_seed():
     """Comprehensive database seeding with all system functionalities"""
     try:
-        from app.models.attachment import FileAttachment
         import uuid
+        # Import FileAttachment if available, otherwise skip attachments
+        try:
+            from app.models.attachment import FileAttachment
+            has_attachments = True
+        except ImportError:
+            has_attachments = False
+            FileAttachment = None
         
         # Clear existing data
-        FileAttachment.query.delete()
+        if has_attachments and FileAttachment:
+            FileAttachment.query.delete()
         Alert.query.delete()
         Message.query.delete()
         Ticket.query.delete()
@@ -115,17 +122,19 @@ def comprehensive_seed():
                  is_read=True)
         ]
         
-        # Create file attachments
-        attachments = [
-            FileAttachment(
-                id=str(uuid.uuid4()),
-                ticket_id=tickets[0].id,
-                filename='server_error_log.txt',
-                file_size=2048576,
-                mime_type='text/plain',
-                uploaded_by=str(users[0].id)
-            )
-        ]
+        # Create file attachments (if model available)
+        attachments = []
+        if has_attachments and FileAttachment:
+            attachments = [
+                FileAttachment(
+                    id=str(uuid.uuid4()),
+                    ticket_id=tickets[0].id,
+                    filename='server_error_log.txt',
+                    file_size=2048576,
+                    mime_type='text/plain',
+                    uploaded_by=str(users[0].id)
+                )
+            ]
         
         for item in messages + alerts + attachments:
             db.session.add(item)
@@ -138,7 +147,7 @@ def comprehensive_seed():
             'tickets': Ticket.query.count(),
             'messages': Message.query.count(),
             'alerts': Alert.query.count(),
-            'attachments': FileAttachment.query.count()
+            'attachments': FileAttachment.query.count() if has_attachments and FileAttachment else 0
         }
         
         return jsonify({
