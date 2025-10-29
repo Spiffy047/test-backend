@@ -34,7 +34,6 @@ class User(db.Model):
     
     # Audit timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)  # Account creation time
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)  # Last update
     
     # Database relationships - define how users relate to other entities
     created_tickets = db.relationship('Ticket', foreign_keys='Ticket.created_by', backref='creator', lazy='dynamic')
