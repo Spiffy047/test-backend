@@ -71,7 +71,17 @@ class TicketListResource(Resource):
         """Create new ticket with auto-generated TKT-XXXX ID"""
         # Extract JSON data from request body
         data = request.get_json()
-        user_id = data.get('created_by', 'user1')  # Use provided user ID or default
+        
+        # Validate required fields
+        if not data:
+            return {'error': 'No data provided'}, 400
+        
+        required_fields = ['title', 'description', 'category']
+        for field in required_fields:
+            if not data.get(field):
+                return {'error': f'Missing required field: {field}'}, 400
+        
+        user_id = data.get('created_by', 1)  # Use provided user ID or default to 1
         
         try:
             # Generate sequential ticket ID starting from TKT-1001

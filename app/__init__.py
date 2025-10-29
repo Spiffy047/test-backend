@@ -416,32 +416,50 @@ def create_app(config_name='default'):
     
     @app.route('/api/messages/ticket/<ticket_id>/timeline')
     def ticket_timeline(ticket_id):
-        # Sample messages
-        sample_messages = [{
-            'id': 'msg1',
-            'ticket_id': ticket_id,
-            'sender_id': 'user1',
-            'sender_name': 'John Smith',
-            'sender_role': 'Normal User',
-            'message': 'I am having trouble accessing my email. The error message says authentication failed.',
-            'timestamp': '2025-10-27T10:30:00Z',
-            'type': 'message'
-        }, {
-            'id': 'msg2',
-            'ticket_id': ticket_id,
-            'sender_id': 'agent1',
-            'sender_name': 'Sarah Johnson',
-            'sender_role': 'Technical User',
-            'message': 'Hi John, I can help you with this. Can you please try resetting your password first?',
-            'timestamp': '2025-10-27T10:45:00Z',
-            'type': 'message'
-        }]
-        
-        # Add any new messages for this ticket
-        if ticket_id in messages_store:
-            sample_messages.extend(messages_store[ticket_id])
-        
-        return sample_messages
+        try:
+            from sqlalchemy import text
+            
+            # Get ticket ID from ticket_id string
+            ticket_result = db.session.execute(text("""
+                SELECT id FROM tickets WHERE ticket_id = :ticket_id
+            """), {'ticket_id': ticket_id})
+            
+            ticket_row = ticket_result.fetchone()
+            if not ticket_row:
+                return []
+            
+            internal_ticket_id = ticket_row[0]
+            
+            # Get messages from database
+            result = db.session.execute(text("""
+                SELECT m.id, m.message, m.created_at, m.sender_id, u.name, u.role
+                FROM messages m
+                LEFT JOIN users u ON m.sender_id = u.id
+                WHERE m.ticket_id = :ticket_id
+                ORDER BY m.created_at ASC
+            """), {'ticket_id': internal_ticket_id})
+            
+            messages = []
+            for row in result:
+                messages.append({
+                    'id': row[0],
+                    'ticket_id': ticket_id,
+                    'sender_id': row[3],
+                    'sender_name': row[4] or 'Unknown User',
+                    'sender_role': row[5] or 'Normal User',
+                    'message': row[1],
+                    'timestamp': row[2].isoformat() + 'Z' if row[2] else None,
+                    'type': 'message'
+                })
+            
+            # Add any new messages from memory store
+            if ticket_id in messages_store:
+                messages.extend(messages_store[ticket_id])
+            
+            return messages
+        except Exception as e:
+            print(f"Error fetching timeline for {ticket_id}: {e}")
+            return []
     
     @app.route('/api/tickets/<ticket_id>/activities')
     def ticket_activities(ticket_id):
@@ -485,7 +503,7 @@ def create_app(config_name='default'):
             
         try:
             if 'file' not in request.files:
-                return {'error': 'No file provided'}, 400
+                return {'error': 'No image provided'}, 400
             
             file = request.files['file']
             ticket_id = request.form.get('ticket_id')
