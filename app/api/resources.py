@@ -13,21 +13,40 @@ from app.services.email_service import EmailService
 class AuthResource(Resource):
     def post(self):
         try:
-            data = login_schema.load(request.get_json())
-            user = User.query.filter_by(email=data['email']).first()
+            from werkzeug.security import check_password_hash
+            from sqlalchemy import text
             
-            if user and user.check_password(data['password']):
-                access_token = create_access_token(identity=user.id)
+            data = request.get_json()
+            email = data.get('email')
+            password = data.get('password')
+            
+            if not email or not password:
+                return {'success': False, 'message': 'Email and password required'}, 400
+            
+            # Find user using direct SQL
+            result = db.session.execute(text("""
+                SELECT id, name, email, password_hash, role 
+                FROM users 
+                WHERE email = :email AND is_verified = true
+            """), {'email': email})
+            
+            user_row = result.fetchone()
+            
+            if user_row and check_password_hash(user_row[3], password):
+                access_token = create_access_token(identity=user_row[0])
                 return {
                     'success': True,
-                    'user': user_schema.dump(user),
+                    'user': {
+                        'id': user_row[0],
+                        'name': user_row[1],
+                        'email': user_row[2],
+                        'role': user_row[4]
+                    },
                     'access_token': access_token
                 }
             else:
                 return {'success': False, 'message': 'Invalid credentials'}, 401
                 
-        except ValidationError as e:
-            return {'success': False, 'message': 'Validation error', 'errors': e.messages}, 400
         except Exception as e:
             return {'success': False, 'message': str(e)}, 500
 
