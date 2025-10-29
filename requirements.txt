@@ -9,9 +9,9 @@ Flask-Marshmallow==0.15.0
 marshmallow==3.20.1
 marshmallow-sqlalchemy==0.29.0
 python-dotenv==1.0.0
-psycopg2==2.9.9
+psycopg2-binary==2.9.9
 Werkzeug==3.0.1
 gunicorn==21.2.0
 sendgrid==6.10.0
-cloudinary==1.36.0
-Pillow==10.1.0
+cloudinary==1.40.0
+Pillow==10.4.0
