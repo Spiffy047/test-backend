@@ -182,7 +182,7 @@ def create_app(config_name='default'):
             cloudinary_service = CloudinaryService()
             result = cloudinary_service.upload_image(file, ticket_id, uploaded_by)
             
-            if result:
+            if result and 'error' not in result:
                 return {
                     'message': 'Cloudinary upload successful',
                     'url': result['url'],
@@ -193,7 +193,8 @@ def create_app(config_name='default'):
                     'bytes': result['bytes']
                 }, 201
             else:
-                return {'error': 'Cloudinary upload failed'}, 500
+                error_msg = result.get('error', 'Unknown error') if result else 'Service returned None'
+                return {'error': f'Cloudinary upload failed: {error_msg}'}, 500
                 
         except Exception as e:
             import traceback
@@ -208,16 +209,17 @@ def create_app(config_name='default'):
         try:
             from app.services.cloudinary_service import CloudinaryService
             cloudinary_service = CloudinaryService()
-            success = cloudinary_service.delete_image(public_id)
+            result = cloudinary_service.delete_image(public_id)
             
-            if success:
+            if result and 'error' not in result:
                 return {
                     'message': 'Cloudinary delete successful',
                     'result': 'ok',
                     'public_id': public_id
                 }
             else:
-                return {'error': 'Cloudinary delete failed'}, 500
+                error_msg = result.get('error', 'Unknown error') if result else 'Service returned None'
+                return {'error': f'Cloudinary delete failed: {error_msg}'}, 500
                 
         except Exception as e:
             import traceback

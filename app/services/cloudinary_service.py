@@ -18,8 +18,9 @@ class CloudinaryService:
             api_secret = os.environ.get('CLOUDINARY_API_SECRET')
             
             if not all([cloud_name, api_key, api_secret]):
-                print(f"Missing Cloudinary config: cloud_name={bool(cloud_name)}, api_key={bool(api_key)}, api_secret={bool(api_secret)}")
-                return None
+                error_msg = f"Missing config: cloud_name={bool(cloud_name)}, api_key={bool(api_key)}, api_secret={bool(api_secret)}"
+                print(f"Cloudinary config error: {error_msg}")
+                return {'error': error_msg}
             
             # Reset file pointer
             file.seek(0)
@@ -41,15 +42,20 @@ class CloudinaryService:
             }
             
         except Exception as e:
-            print(f"Cloudinary upload error: {e}")
+            error_msg = f"Cloudinary upload error: {str(e)}"
+            print(error_msg)
             import traceback
             traceback.print_exc()
-            return None
+            return {'error': error_msg}
     
     def delete_image(self, public_id):
         try:
             result = cloudinary.uploader.destroy(public_id)
-            return result['result'] == 'ok'
+            if result['result'] == 'ok':
+                return {'success': True, 'result': result['result']}
+            else:
+                return {'error': f"Delete failed: {result.get('result', 'unknown')}"}
         except Exception as e:
-            print(f"Cloudinary delete error: {e}")
-            return False
+            error_msg = f"Cloudinary delete error: {str(e)}"
+            print(error_msg)
+            return {'error': error_msg}
