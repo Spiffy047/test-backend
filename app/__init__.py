@@ -189,6 +189,24 @@ def create_app(config_name='default'):
             'timestamp': datetime.utcnow().isoformat()
         }
     
+    @app.route('/api/test/users')
+    def test_users():
+        """Test endpoint to check users without JWT protection"""
+        try:
+            from sqlalchemy import text
+            result = db.session.execute(text("SELECT id, name, email, role FROM users LIMIT 5"))
+            users = []
+            for row in result:
+                users.append({
+                    'id': row[0],
+                    'name': row[1], 
+                    'email': row[2],
+                    'role': row[3]
+                })
+            return {'users': users, 'count': len(users)}
+        except Exception as e:
+            return {'error': str(e), 'users': []}
+    
 
     
     # Note: Authentication endpoints moved to Flask-RESTful resources
