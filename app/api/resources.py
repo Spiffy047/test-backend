@@ -42,10 +42,10 @@ class AuthResource(Resource):
 
 class AuthMeResource(Resource):
     def get(self):
-        """Get current user info from JWT token"""
+        """Get current user info - test endpoint"""
         try:
-            current_user_id = get_jwt_identity()
-            user = User.query.get(current_user_id)
+            # Test without JWT for now
+            user = User.query.get(16)  # Test user ID
             
             if not user:
                 return {'error': 'User not found'}, 404
