@@ -7,6 +7,7 @@ api = Api(api_bp)
 # Import resources after creating api instance
 from app.api.resources import (
     AuthResource,
+    AuthMeResource,
     TicketListResource,
     TicketResource,
     UserListResource,
@@ -22,6 +23,7 @@ from app.api.resources import (
 
 # Register API resources
 api.add_resource(AuthResource, '/auth/login')
+api.add_resource(AuthMeResource, '/auth/me')
 api.add_resource(TicketListResource, '/tickets')
 api.add_resource(TicketResource, '/tickets/<string:ticket_id>')
 api.add_resource(UserListResource, '/users')

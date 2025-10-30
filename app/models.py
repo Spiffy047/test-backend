@@ -124,9 +124,18 @@ class Ticket(db.Model):
         Uses dynamic SLA targets from configuration if available,
         falls back to hardcoded values for backward compatibility
         """
-        from app.services.config_service import ConfigService
-        target_hours = ConfigService.get_sla_hours(self.priority)
+        try:
+            from app.services.configuration_service import ConfigurationService
+            priority = ConfigurationService.get_priority_by_name(self.priority)
+            target_hours = priority.sla_hours if priority else self._get_fallback_sla_hours()
+        except:
+            target_hours = self._get_fallback_sla_hours()
         return self.hours_open > target_hours
+    
+    def _get_fallback_sla_hours(self):
+        """Fallback SLA hours if configuration is not available"""
+        fallback = {'Critical': 4, 'High': 8, 'Medium': 24, 'Low': 72}
+        return fallback.get(self.priority, 24)
     
     def __repr__(self):
         return f'<Ticket {self.ticket_id}>'

@@ -20,11 +20,9 @@ class TicketSchema(Schema):
     ticket_id = fields.Str(dump_only=True)
     title = fields.Str(required=True, validate=validate.Length(min=5, max=200))
     description = fields.Str(required=True, validate=validate.Length(min=10))
-    status = fields.Str(validate=validate.OneOf(['New', 'Open', 'Pending', 'Closed']))
+    status = fields.Str()
     priority = fields.Str(required=True, validate=validate.OneOf(['Low', 'Medium', 'High', 'Critical']))
-    category = fields.Str(required=True, validate=validate.OneOf([
-        'Hardware', 'Software', 'Network', 'Access', 'Other'
-    ]))
+    category = fields.Str(required=True)
     created_by = fields.Int(required=True)
     assigned_to = fields.Int(allow_none=True)
     created_at = fields.DateTime(dump_only=True)
