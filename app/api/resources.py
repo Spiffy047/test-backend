@@ -64,7 +64,6 @@ class AuthMeResource(Resource):
             return {'error': str(e)}, 500
 
 class TicketListResource(Resource):
-    @jwt_required()
     def get(self):
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 10, type=int)
