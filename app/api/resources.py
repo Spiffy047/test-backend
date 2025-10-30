@@ -284,7 +284,8 @@ class TicketListResource(Resource):
                         )
                         db.session.add(message)
                         db.session.commit()
-                        print(f"✅ Attachment uploaded: {attachment_file.filename}")
+                        db.session.refresh(message)
+                        print(f"✅ Attachment uploaded and timeline updated: {attachment_file.filename}")
                 except Exception as e:
                     print(f"⚠️ Attachment upload failed: {e}")
                     # Don't fail ticket creation if attachment fails
@@ -601,6 +602,13 @@ class MessageListResource(Resource):
             }
             
             print(f"✅ Message response: {response}")
+            # Force refresh timeline after message creation
+            try:
+                db.session.refresh(message)
+                print(f"✅ Message committed and refreshed: {message.id}")
+            except Exception as refresh_error:
+                print(f"⚠️ Message refresh failed: {refresh_error}")
+            
             return response, 201
             
         except Exception as e:
@@ -804,6 +812,60 @@ class AlertCountResource(Resource):
         except Exception as e:
             return {'error': f'Failed to get alert count: {str(e)}'}, 500
 
+class TimelineDebugResource(Resource):
+    def get(self, ticket_id):
+        """Debug endpoint to check timeline data"""
+        try:
+            from sqlalchemy import text
+            
+            # Get ticket info
+            ticket_result = db.session.execute(text(
+                "SELECT id, ticket_id, title FROM tickets WHERE ticket_id = :ticket_id OR id = :ticket_id"
+            ), {'ticket_id': ticket_id})
+            
+            ticket_row = ticket_result.fetchone()
+            if not ticket_row:
+                return {'error': 'Ticket not found', 'ticket_id': ticket_id}
+            
+            internal_id = ticket_row[0]
+            
+            # Get all messages for this ticket
+            messages_result = db.session.execute(text("""
+                SELECT m.id, m.message, m.created_at, m.sender_id, u.name, u.role
+                FROM messages m
+                LEFT JOIN users u ON m.sender_id = u.id
+                WHERE m.ticket_id = :ticket_id
+                ORDER BY m.created_at DESC
+            """), {'ticket_id': internal_id})
+            
+            messages = []
+            for row in messages_result:
+                messages.append({
+                    'id': row[0],
+                    'message': row[1],
+                    'created_at': row[2].isoformat() if row[2] else None,
+                    'sender_id': row[3],
+                    'sender_name': row[4] or 'Unknown',
+                    'sender_role': row[5] or 'Unknown'
+                })
+            
+            return {
+                'ticket': {
+                    'internal_id': internal_id,
+                    'ticket_id': ticket_row[1],
+                    'title': ticket_row[2]
+                },
+                'messages': messages,
+                'message_count': len(messages),
+                'debug_info': {
+                    'searched_ticket_id': ticket_id,
+                    'found_internal_id': internal_id
+                }
+            }
+            
+        except Exception as e:
+            return {'error': str(e), 'ticket_id': ticket_id}, 500
+
 class ImageUploadResource(Resource):
     def post(self):
         from flask import request
@@ -848,6 +910,7 @@ class ImageUploadResource(Resource):
                     )
                     db.session.add(message)
                     db.session.commit()
+                    db.session.refresh(message)
             except Exception as e:
                 print(f"Timeline update failed: {e}")
             

@@ -20,7 +20,8 @@ from app.api.resources import (
     MigrateTicketIDsResource,
     AssignableAgentsResource,
     AlertResource,
-    AlertCountResource
+    AlertCountResource,
+    TimelineDebugResource
 )
 
 # Register API resources
@@ -39,3 +40,4 @@ api.add_resource(MigrateTicketIDsResource, '/admin/migrate-ticket-ids')
 api.add_resource(AssignableAgentsResource, '/agents/assignable')
 api.add_resource(AlertResource, '/alerts/<int:user_id>')
 api.add_resource(AlertCountResource, '/alerts/<int:user_id>/count')
+api.add_resource(TimelineDebugResource, '/debug/timeline/<string:ticket_id>')
