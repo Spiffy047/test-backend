@@ -257,19 +257,30 @@ class TicketListResource(Resource):
                 except Exception as e:
                     print(f"⚠️ Supervisor notification failed: {e}")
             
-            # Handle file attachment if present - check multiple field names
+            # Enhanced file attachment detection
             attachment_file = None
             if request.content_type and 'multipart/form-data' in request.content_type:
+                print(f"📁 Form files available: {list(request.files.keys())}")
                 # Check for attachment in multiple possible field names
-                for field_name in ['image', 'attachment', 'file']:
+                for field_name in ['attachment', 'file', 'image', 'document', 'upload']:
                     if field_name in request.files:
                         file = request.files[field_name]
-                        if file and file.filename:
+                        if file and file.filename and file.filename.strip():
                             attachment_file = file
+                            print(f"✅ Found attachment: {file.filename} in field '{field_name}'")
+                            break
+                
+                # If no specific field found, try any available file
+                if not attachment_file:
+                    for field_name, file in request.files.items():
+                        if file and file.filename and file.filename.strip():
+                            attachment_file = file
+                            print(f"✅ Using fallback file: {file.filename} from field '{field_name}'")
                             break
             
             if attachment_file:
                 try:
+                    print(f"📎 Processing attachment: {attachment_file.filename} ({attachment_file.content_type})")
                     from app.services.cloudinary_service import CloudinaryService
                     cloudinary_service = CloudinaryService()
                     result = cloudinary_service.upload_image(attachment_file, ticket.ticket_id, data['created_by'])
@@ -280,15 +291,21 @@ class TicketListResource(Resource):
                         message = Message(
                             ticket_id=ticket.id,
                             sender_id=data['created_by'],
-                            message=f'Attached file: {attachment_file.filename} ({file_size_kb} KB)'
+                            message=f'📎 Attached file: {attachment_file.filename} ({file_size_kb} KB)'
                         )
                         db.session.add(message)
                         db.session.commit()
                         db.session.refresh(message)
                         print(f"✅ Attachment uploaded and timeline updated: {attachment_file.filename}")
+                    else:
+                        print(f"❌ Cloudinary upload failed for: {attachment_file.filename}")
                 except Exception as e:
                     print(f"⚠️ Attachment upload failed: {e}")
+                    import traceback
+                    traceback.print_exc()
                     # Don't fail ticket creation if attachment fails
+            else:
+                print(f"ℹ️ No attachment file found in request")
             
             # Send email notification
             try:
@@ -871,17 +888,31 @@ class ImageUploadResource(Resource):
         from flask import request
         from app.services.cloudinary_service import CloudinaryService
         
-        # Check for image in multiple possible field names
+        print(f"📁 ImageUpload - Available files: {list(request.files.keys())}")
+        print(f"📁 ImageUpload - Form data: {dict(request.form)}")
+        
+        # Enhanced file detection
         image_file = None
-        for field_name in ['image', 'file', 'attachment']:
+        for field_name in ['image', 'file', 'attachment', 'document', 'upload']:
             if field_name in request.files:
                 file = request.files[field_name]
-                if file and file.filename:
+                if file and file.filename and file.filename.strip():
                     image_file = file
+                    print(f"✅ Found file: {file.filename} in field '{field_name}'")
+                    break
+        
+        # Fallback: try any available file
+        if not image_file:
+            for field_name, file in request.files.items():
+                if file and file.filename and file.filename.strip():
+                    image_file = file
+                    print(f"✅ Using fallback file: {file.filename} from field '{field_name}'")
                     break
         
         if not image_file:
-            return {'error': 'No image provided'}, 400
+            available_files = list(request.files.keys())
+            print(f"❌ No valid file found. Available fields: {available_files}")
+            return {'error': f'No file provided. Available fields: {available_files}'}, 400
         
         ticket_id = request.form.get('ticket_id')
         user_id = request.form.get('user_id')
@@ -889,9 +920,9 @@ class ImageUploadResource(Resource):
         if not ticket_id or not user_id:
             return {'error': 'Missing required fields'}, 400
         
-        # Check if file is an image
-        if not image_file.content_type.startswith('image/'):
-            return {'error': 'File must be an image'}, 400
+        # Allow all file types, not just images
+        print(f"📎 Processing file: {image_file.filename} ({image_file.content_type})")
+        # Remove image-only restriction to allow all file types
         
         cloudinary_service = CloudinaryService()
         result = cloudinary_service.upload_image(image_file, ticket_id, user_id)
