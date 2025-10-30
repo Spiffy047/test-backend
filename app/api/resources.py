@@ -141,6 +141,12 @@ class TicketListResource(Resource):
         
         tickets = []
         for ticket in paginated.items:
+            # Get assigned agent name
+            assigned_agent_name = None
+            if ticket.assigned_to:
+                agent = User.query.get(ticket.assigned_to)
+                assigned_agent_name = agent.name if agent else f'Agent {ticket.assigned_to}'
+            
             tickets.append({
                 'id': ticket.id,
                 'ticket_id': ticket.ticket_id,
@@ -151,6 +157,7 @@ class TicketListResource(Resource):
                 'category': ticket.category,
                 'created_by': ticket.created_by,
                 'assigned_to': ticket.assigned_to,
+                'assigned_agent_name': assigned_agent_name,
                 'created_at': ticket.created_at.isoformat() if ticket.created_at else None,
                 'updated_at': ticket.updated_at.isoformat() if ticket.updated_at else None,
                 'resolved_at': ticket.resolved_at.isoformat() if ticket.resolved_at else None,
@@ -386,7 +393,12 @@ class TicketListResource(Resource):
             """))
             
             agent = result.fetchone()
-            return agent[0] if agent else None
+            if agent:
+                print(f"✅ Auto-assigned to agent: {agent[1]} (ID: {agent[0]}, workload: {agent[2]})")
+                return agent[0]
+            else:
+                print(f"⚠️ No agents available for assignment")
+                return None
             
         except Exception as e:
             print(f"Auto-assignment failed: {e}")
