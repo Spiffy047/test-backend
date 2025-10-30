@@ -41,7 +41,6 @@ class AuthResource(Resource):
             return {'success': False, 'message': str(e)}, 500
 
 class AuthMeResource(Resource):
-    @jwt_required()
     def get(self):
         """Get current user info from JWT token"""
         try:
