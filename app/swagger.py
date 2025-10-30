@@ -9,30 +9,25 @@ api = Api(
     swagger_bp,
     version='2.0',
     title='Hotfix ServiceDesk API',
-    description='Complete REST API for Hotfix ServiceDesk with authentication, tickets, messaging, file uploads, and analytics',
+    description='Complete REST API for Hotfix ServiceDesk with authentication, tickets, messaging, file uploads, and analytics. Live deployment at https://hotfix.onrender.com',
     doc='/docs/',
     authorizations={
         'Bearer': {
             'type': 'apiKey',
             'in': 'header',
             'name': 'Authorization',
-            'description': 'JWT Bearer token. Format: Bearer <token>'
+            'description': 'JWT Bearer token (currently disabled for deployment)'
         }
-    },
-    security='Bearer'
+    }
 )
 
-# Create namespaces
+# Create namespaces for current working endpoints
 auth_ns = Namespace('auth', description='Authentication operations')
-tickets_ns = Namespace('tickets', description='Ticket management')
-users_ns = Namespace('users', description='User management')
-upload_ns = Namespace('upload', description='File and image uploads')
-analytics_ns = Namespace('analytics', description='Analytics and reporting')
-config_ns = Namespace('config', description='System configuration')
-messages_ns = Namespace('messages', description='Messaging system')
-notifications_ns = Namespace('notifications', description='Email notifications')
-export_ns = Namespace('export', description='Data export')
-db_ns = Namespace('db', description='Database operations')
+tickets_ns = Namespace('tickets', description='Ticket management with SLA tracking')
+users_ns = Namespace('users', description='User management with role-based access')
+upload_ns = Namespace('upload', description='File and image uploads via Cloudinary')
+analytics_ns = Namespace('analytics', description='Real-time analytics and reporting')
+config_ns = Namespace('config', description='Dynamic system configuration')
 
 api.add_namespace(auth_ns)
 api.add_namespace(tickets_ns)
@@ -40,10 +35,6 @@ api.add_namespace(users_ns)
 api.add_namespace(upload_ns)
 api.add_namespace(analytics_ns)
 api.add_namespace(config_ns)
-api.add_namespace(messages_ns)
-api.add_namespace(notifications_ns)
-api.add_namespace(export_ns)
-api.add_namespace(db_ns)
 
 # Define API models for documentation
 login_model = api.model('Login', {
@@ -65,7 +56,8 @@ ticket_create_model = api.model('TicketCreate', {
     'description': fields.String(required=True, description='Detailed description', example='Users cannot access email since 9 AM'),
     'priority': fields.String(required=True, description='Priority level', enum=['Critical', 'High', 'Medium', 'Low']),
     'category': fields.String(required=True, description='Ticket category', enum=['Hardware', 'Software', 'Network', 'Access', 'Email', 'Security']),
-    'created_by': fields.Integer(required=True, description='Creator user ID', example=1)
+    'created_by': fields.Integer(required=True, description='Creator user ID', example=1),
+    'attachment': fields.Raw(description='Optional file attachment (multipart form data)')
 })
 
 ticket_model = api.model('Ticket', {
@@ -89,13 +81,6 @@ message_model = api.model('Message', {
     'message': fields.String(required=True, description='Message content', example='Issue has been resolved')
 })
 
-email_notification_model = api.model('EmailNotification', {
-    'to_email': fields.String(required=True, description='Recipient email', example='user@company.com'),
-    'ticket_id': fields.String(required=True, description='Ticket ID', example='TKT-1001'),
-    'ticket_title': fields.String(required=True, description='Ticket title', example='Server Issue'),
-    'message_type': fields.String(description='Notification type', enum=['created', 'updated', 'assigned'], example='created')
-})
-
 # Authentication endpoints
 @auth_ns.route('/login')
 class LoginDoc(Resource):
@@ -106,7 +91,7 @@ class LoginDoc(Resource):
         400: 'Missing email or password'
     })
     def post(self):
-        """Authenticate user and return JWT token"""
+        """Authenticate user (JWT disabled for deployment)"""
         return {
             'success': True,
             'user': {
@@ -115,7 +100,7 @@ class LoginDoc(Resource):
                 'email': 'john.smith@company.com',
                 'role': 'Normal User'
             },
-            'access_token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+            'message': 'Login successful'
         }
 
 @tickets_ns.route('')
@@ -146,12 +131,13 @@ class TicketsDoc(Resource):
         400: 'Validation error'
     })
     def post(self):
-        """Create new support ticket"""
+        """Create new support ticket (supports both JSON and multipart form data with attachments)"""
         return {
             'ticket_id': 'TKT-1001',
             'title': 'Email server down',
             'status': 'New',
-            'priority': 'Critical'
+            'priority': 'Critical',
+            'attachment_uploaded': True
         }
 
 @tickets_ns.route('/<string:ticket_id>')
@@ -342,56 +328,18 @@ class ConfigInitDoc(Resource):
         """Initialize configuration tables with default data"""
         return {'success': True, 'message': 'Configuration initialized'}
 
-# Messages endpoints
-@messages_ns.route('')
-class MessagesDoc(Resource):
-    @messages_ns.expect(message_model)
-    @messages_ns.doc('create_message')
-    def post(self):
-        """Create new message in ticket timeline"""
-        return {
-            'id': 101,
-            'ticket_id': 'TKT-1001',
-            'sender_name': 'John Smith',
-            'message': 'Issue has been resolved',
-            'timestamp': '2025-10-29T17:56:20.000663Z',
-            'type': 'message'
-        }
-
-@messages_ns.route('/ticket/<string:ticket_id>/timeline')
-class TicketTimelineDoc(Resource):
-    @messages_ns.doc('ticket_timeline')
-    def get(self, ticket_id):
-        """Get complete ticket timeline (messages and activities)"""
-        return [{
-            'id': 101,
-            'message': 'Ticket created',
-            'sender_name': 'John Smith',
-            'timestamp': '2025-10-29T17:56:20.000663Z',
-            'type': 'message'
-        }]
-
-# Notifications endpoints
-@notifications_ns.route('/email')
-class EmailNotificationDoc(Resource):
-    @notifications_ns.expect(email_notification_model)
-    @notifications_ns.doc('send_email')
-    def post(self):
-        """Send email notification via SendGrid"""
-        return {'success': True, 'message': 'Email sent'}
-
-# Export endpoints
-@export_ns.route('/tickets/excel')
-class ExportTicketsDoc(Resource):
-    @export_ns.doc('export_tickets')
-    def get(self):
-        """Export all tickets to CSV format"""
-        return 'ID,Title,Status,Priority,Category,Created,Assigned\nTKT-1001,Email Issue,Open,High,Software,2025-10-29,Sarah Johnson'
-
-# Database operations
-@db_ns.route('/create-tables')
-class CreateTablesDoc(Resource):
-    @db_ns.doc('create_tables')
-    def post(self):
-        """Create all database tables using SQLAlchemy ORM"""
-        return {'success': True, 'message': 'All tables created successfully'}
+# Note: Additional endpoints are available in the main API:
+# - /api/messages - Message management (built into Flask-RESTful resources)
+# - /api/tickets/{id}/timeline - Ticket timeline with messages and activities  
+# - /api/files/upload - File upload with timeline integration
+# - /api/export/tickets - CSV export functionality
+# - /api/db/create-tables - Database table creation
+# 
+# Live API Base URL: https://hotfix.onrender.com/api/
+# Frontend: https://hotfix-ochre.vercel.app
+# 
+# System Status:
+# - Database: PostgreSQL (Live with existing data)
+# - File Storage: Cloudinary
+# - Authentication: Simplified (JWT disabled for deployment)
+# - Real-time Features: Polling-based updates

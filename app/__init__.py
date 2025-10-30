@@ -65,7 +65,6 @@ def create_app(config_name='default'):
             try:
                 db.create_all()
                 print("✅ Database tables initialized successfully")
-                print("💡 To seed database with sample data, run: python init_postgres_db.py")
                 
                 # Initialize configuration tables (safe - won't affect existing data)
                 try:

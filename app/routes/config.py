@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify
-from app.services.config_service import ConfigService
-from app.models import TicketPriority, TicketStatus, TicketCategory, UserRole
+from app.services.configuration_service import ConfigurationService
+from app.models.configuration import TicketPriority, TicketStatus, TicketCategory, UserRole
 
 config_bp = Blueprint('config', __name__)
 
@@ -8,7 +8,7 @@ config_bp = Blueprint('config', __name__)
 def init_config():
     """Initialize configuration tables"""
     try:
-        ConfigService.init_config()
+        ConfigurationService.initialize_default_configuration()
         return jsonify({'success': True, 'message': 'Configuration initialized'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
