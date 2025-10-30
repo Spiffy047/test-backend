@@ -1,221 +1,103 @@
-# IT ServiceDesk Backend API
+# IT ServiceDesk Backend
 
-A comprehensive Flask-based REST API for IT ServiceDesk management with role-based access control, real-time analytics, and Cloudinary file upload integration.
+Flask REST API backend for the IT ServiceDesk platform with intelligent auto-assignment, advanced file handling, and comprehensive analytics.
 
-## 🚀 Live Demo
+## Features
 
-**API URL**: https://hotfix.onrender.com  
-**Documentation**: https://hotfix.onrender.com/api/docs/
+### Intelligent Auto-Assignment System
+- **Workload-based assignment** - Automatically assigns tickets to agents with least active workload
+- **Live database integration** - Uses real agent data from PostgreSQL
+- **Role-based filtering** - Only assigns to Technical Users and Technical Supervisors
+- **Smart notifications** - Creates alerts for assigned agents and supervisors
 
-## ✨ Features
+### Advanced File Upload System
+- **Multi-endpoint support** - `/api/files/upload` and `/api/upload/image`
+- **Cloudinary integration** - Secure cloud storage with automatic optimization
+- **Timeline integration** - File uploads appear immediately in ticket timeline
+- **Enhanced field detection** - Automatically detects files in multiple form field names
 
-### Core Functionality
-- **User Management** - Role-based access control (Normal User, Technical User, Technical Supervisor, System Admin)
-- **Ticket Management** - Complete CRUD operations with SLA tracking
-- **Real-time Analytics** - Dashboard metrics and performance monitoring
-- **File Upload** - Cloudinary integration for secure file storage
-- **Messaging System** - Ticket communication and timeline
-- **Alert System** - Real-time notifications
+### Authentication & Security
+- **JWT token-based authentication** - Secure API access
+- **Role-based access control** - Different permissions per user role
+- **CORS configuration** - Secure cross-origin requests
+- **Input validation** - Comprehensive data validation
 
-### Advanced Features
-- **SLA Monitoring** - Automatic violation detection and tracking
-- **Agent Performance** - Workload distribution and performance metrics
-- **Ticket Aging Analysis** - Time-based ticket categorization
-- **Export Functionality** - CSV export for reporting
-- **Interactive Documentation** - Swagger/OpenAPI integration
+## Quick Start
 
-## 🛠️ Technology Stack
-
-- **Framework**: Flask 3.0.0 with Flask-RESTful
-- **Database**: PostgreSQL with SQLAlchemy ORM
-- **Authentication**: JWT tokens with Flask-JWT-Extended
-- **File Storage**: Cloudinary integration
-- **Documentation**: Swagger/OpenAPI with Flask-RESTX
-- **Deployment**: Render with Gunicorn
-
-## 📦 Installation
-
-### Prerequisites
-- Python 3.11+
-- PostgreSQL database
-- Cloudinary account
-
-### Local Development
 ```bash
-# Clone repository
-git clone <repository-url>
-cd it-servicedesk-backend
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
 # Install dependencies
 pip install -r requirements.txt
 
 # Set environment variables
-cp .env.example .env
-# Edit .env with your configuration
+export DATABASE_URL=postgresql://user:pass@host:port/dbname
+export CLOUDINARY_CLOUD_NAME=your_cloud_name
+export CLOUDINARY_API_KEY=your_api_key
+export CLOUDINARY_API_SECRET=your_api_secret
 
-# Run development server (auto-initializes database)
+# Run development server
 python app.py
 ```
 
-## 🔧 Environment Variables
+## API Endpoints
 
-```bash
-# Database
-DATABASE_URL=postgresql://username:password@localhost/servicedesk
+### Authentication
+- `POST /api/auth/login` - User login
+- `GET /api/auth/me` - Get current user info
 
-# Cloudinary (for file uploads)
-CLOUDINARY_CLOUD_NAME=your_cloud_name
-CLOUDINARY_API_KEY=your_api_key
-CLOUDINARY_API_SECRET=your_api_secret
-
-# JWT (optional - currently disabled for deployment)
-JWT_SECRET_KEY=your_jwt_secret
-
-# Flask
-FLASK_ENV=production
-```
-
-## 📚 API Documentation
-
-### Interactive Documentation
-Visit `/api/docs/` for complete Swagger documentation with interactive testing.
-
-### Key Endpoints
-
-#### Authentication
-- `POST /api/auth/login` - User authentication
-
-#### Tickets
+### Tickets
 - `GET /api/tickets` - List tickets with pagination
-- `POST /api/tickets` - Create new ticket
+- `POST /api/tickets` - Create ticket with auto-assignment
 - `GET /api/tickets/{id}` - Get ticket details
 - `PUT /api/tickets/{id}` - Update ticket
 
-#### Users
-- `GET /api/users` - List users
-- `POST /api/users` - Create user
-- `GET /api/users/{id}` - Get user details
+### File Uploads
+- `POST /api/files/upload` - Upload files to timeline
+- `POST /api/upload/image` - Upload images with Cloudinary
 
-#### Analytics
-- `GET /api/tickets/analytics/sla-adherence` - SLA metrics
-- `GET /api/agents/performance` - Agent performance
-- `GET /api/analytics/ticket-aging` - Aging analysis
-- `GET /api/analytics/sla-violations` - SLA violations
+### Agents & Assignment
+- `GET /api/agents/assignable` - Get available agents
+- `GET /api/analytics/agent-workload` - Agent workload data
+- `GET /api/analytics/agent-performance` - Performance metrics
 
-#### File Upload
-- `POST /api/files/cloudinary/upload` - Upload files to Cloudinary
-- `GET /api/files/ticket/{ticket_id}` - Get ticket files
+### Messages & Timeline
+- `POST /api/messages` - Send message to ticket
+- `GET /api/messages/ticket/{id}/timeline` - Get ticket timeline
 
-## 🏗️ Project Structure
-
-```
-app/
-├── __init__.py                    # Application factory
-├── models.py                      # Core database models
-├── models/
-│   └── configuration.py           # Configuration models
-├── api/
-│   ├── __init__.py               # API blueprint
-│   ├── resources.py              # Main API resources
-│   └── resources/                # Individual resource modules
-├── routes/                       # Additional route blueprints
-│   ├── admin.py
-│   ├── config.py
-│   ├── db_init.py
-│   └── files.py
-├── services/                     # Business logic services
-│   ├── cloudinary_service.py
-│   ├── configuration_service.py
-│   └── email_service.py
-├── schemas.py                    # Data validation schemas
-└── swagger.py                    # API documentation
-```
-
-## 🔐 Security Features
-
-- **Input Validation** - Schema validation with Marshmallow
-- **SQL Injection Protection** - SQLAlchemy ORM
-- **CORS Configuration** - Cross-origin resource sharing
-- **File Upload Security** - Type and size validation
-- **Error Handling** - Comprehensive error responses
-
-## 📊 Database Schema
+## Database Schema
 
 ### Core Tables
-- **users** - User accounts and roles
-- **tickets** - Support tickets with SLA tracking
-- **messages** - Ticket communication
-- **attachments** - File upload metadata
-- **alerts** - User notifications
+- `users` - User accounts with roles
+- `tickets` - Support tickets with auto-assignment
+- `messages` - Ticket timeline messages
+- `alerts` - Notification system
 
-### Relationships
-- Users can create and be assigned tickets
-- Tickets have multiple messages and attachments
-- SLA violations are tracked automatically
+### Configuration Tables
+- `priorities` - Priority levels with SLA targets
+- `categories` - Ticket categories
+- `statuses` - Ticket status definitions
 
-## 🚀 Deployment
+## Environment Variables
 
-### Render Deployment
-1. Connect GitHub repository to Render
-2. Set environment variables in Render dashboard
-3. Deploy automatically on git push
-
-### Environment Setup
-```yaml
-# render.yaml
-services:
-  - type: web
-    name: it-servicedesk-api
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: servicedesk-db
-          property: connectionString
+```bash
+DATABASE_URL=postgresql://user:pass@host:port/dbname
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+JWT_SECRET_KEY=your_jwt_secret
 ```
 
-## 🧪 Testing
+## Deployment
 
-The API has been thoroughly tested with:
-- ✅ 100% endpoint availability
-- ✅ Database connectivity and operations
-- ✅ Authentication and authorization
-- ✅ File upload functionality
-- ✅ Real-time analytics
-- ✅ Error handling
+The backend is deployed on Render with automatic deployments from the main branch.
 
-## 📈 Performance
+- **Production URL**: https://hotfix.onrender.com/api
+- **Health Check**: https://hotfix.onrender.com/health
+- **API Documentation**: Contact system administrator
 
-- **Response Times**: 200-400ms average
-- **Database**: Optimized queries with indexing
-- **File Upload**: Cloudinary CDN integration
-- **Caching**: Efficient data retrieval
+## Recent Updates
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🆘 Support
-
-For support and questions:
-- Check the API documentation at `/api/docs/`
-- Review the test reports in the repository
-- Open an issue on GitHub
-
----
-
-**Built with ❤️ for efficient IT service management**
+- ✅ Fixed auto-assignment to use live database agents
+- ✅ Enhanced file upload with dual endpoint support
+- ✅ Added agent name resolution in ticket responses
+- ✅ Improved error handling and debugging
+- ✅ Fixed Content-Type headers for multipart uploads
