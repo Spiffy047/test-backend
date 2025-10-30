@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify
 from app.services.configuration_service import ConfigurationService
-from app.models.configuration import TicketPriority, TicketStatus, TicketCategory, UserRole
+from app.models import TicketPriority, TicketStatus, TicketCategory, UserRole
 
 config_bp = Blueprint('config', __name__)
 

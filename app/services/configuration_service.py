@@ -5,9 +5,9 @@ Provides methods to retrieve and manage configuration data
 
 from typing import Dict, List, Optional, Any
 from app import db
-from app.models.configuration import (
+from app.models import (
     UserRole, TicketStatus, TicketPriority, 
-    TicketCategory, AlertType, SystemSetting
+    TicketCategory
 )
 
 class ConfigurationService:
@@ -58,45 +58,7 @@ class ConfigurationService:
         """Get ticket category by name"""
         return TicketCategory.query.filter_by(name=name, is_active=True).first()
     
-    @staticmethod
-    def get_alert_types() -> List[AlertType]:
-        """Get all active alert types"""
-        return AlertType.query.filter_by(is_active=True).all()
-    
-    @staticmethod
-    def get_alert_type_by_name(name: str) -> Optional[AlertType]:
-        """Get alert type by name"""
-        return AlertType.query.filter_by(name=name, is_active=True).first()
-    
-    @staticmethod
-    def get_system_setting(key: str, default: Any = None) -> Any:
-        """Get system setting value with type conversion"""
-        setting = SystemSetting.query.filter_by(key=key).first()
-        if setting:
-            return setting.get_typed_value()
-        return default
-    
-    @staticmethod
-    def set_system_setting(key: str, value: Any, data_type: str = 'string', description: str = None) -> SystemSetting:
-        """Set system setting value"""
-        setting = SystemSetting.query.filter_by(key=key).first()
-        if not setting:
-            setting = SystemSetting(key=key, data_type=data_type, description=description)
-            db.session.add(setting)
-        
-        # Convert value to string for storage
-        if data_type == 'json':
-            import json
-            setting.value = json.dumps(value)
-        else:
-            setting.value = str(value)
-        
-        setting.data_type = data_type
-        if description:
-            setting.description = description
-        
-        db.session.commit()
-        return setting
+
     
     @staticmethod
     def initialize_default_configuration():
@@ -158,31 +120,6 @@ class ConfigurationService:
                 category = TicketCategory(**category_data)
                 db.session.add(category)
         
-        # Default alert types
-        default_alert_types = [
-            {'name': 'assignment', 'description': 'Ticket assignment notification', 'template': 'Ticket {ticket_id} has been assigned to you'},
-            {'name': 'sla_violation', 'description': 'SLA violation alert', 'template': 'Ticket {ticket_id} has violated SLA'},
-            {'name': 'status_change', 'description': 'Ticket status change', 'template': 'Ticket {ticket_id} status changed to {status}'},
-            {'name': 'priority_change', 'description': 'Priority change notification', 'template': 'Ticket {ticket_id} priority changed to {priority}'},
-            {'name': 'new_message', 'description': 'New message notification', 'template': 'New message on ticket {ticket_id}'}
-        ]
-        
-        for alert_data in default_alert_types:
-            if not AlertType.query.filter_by(name=alert_data['name']).first():
-                alert_type = AlertType(**alert_data)
-                db.session.add(alert_type)
-        
-        # Default system settings
-        default_settings = [
-            {'key': 'auto_assign_tickets', 'value': 'true', 'data_type': 'boolean', 'description': 'Automatically assign tickets to agents'},
-            {'key': 'sla_check_interval', 'value': '300', 'data_type': 'integer', 'description': 'SLA check interval in seconds'},
-            {'key': 'max_file_upload_size', 'value': '10485760', 'data_type': 'integer', 'description': 'Maximum file upload size in bytes'},
-            {'key': 'notification_email_enabled', 'value': 'true', 'data_type': 'boolean', 'description': 'Enable email notifications'}
-        ]
-        
-        for setting_data in default_settings:
-            if not SystemSetting.query.filter_by(key=setting_data['key']).first():
-                setting = SystemSetting(**setting_data)
-                db.session.add(setting)
+
         
         db.session.commit()
