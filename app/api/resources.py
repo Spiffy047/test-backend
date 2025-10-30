@@ -220,7 +220,7 @@ class TicketListResource(Resource):
                 
             if missing_fields:
                 print(f"❌ Missing required fields: {missing_fields}")
-                return {'error': f'Missing required fields: {', '.join(missing_fields)}'}, 400
+                return {'error': f'Missing required fields: {", ".join(missing_fields)}'}, 400
             
             # Get the highest ticket number from existing ticket_ids
             last_ticket = Ticket.query.filter(Ticket.ticket_id.like('TKT-%')).order_by(Ticket.ticket_id.desc()).first()
