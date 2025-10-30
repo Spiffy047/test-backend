@@ -51,15 +51,13 @@ class AuthMeResource(Resource):
             
             token = auth_header.split(' ')[1]
             
-            # Decode JWT manually
-            import jwt
+            # Decode JWT using Flask-JWT-Extended
+            from flask_jwt_extended import decode_token
             try:
-                payload = jwt.decode(token, 'hardcoded-jwt-secret-key-for-testing-12345', algorithms=['HS256'])
+                payload = decode_token(token)
                 current_user_id = payload.get('sub')
-            except jwt.ExpiredSignatureError:
-                return {'error': 'Token has expired'}, 401
-            except jwt.InvalidTokenError:
-                return {'error': 'Invalid token'}, 401
+            except Exception as e:
+                return {'error': f'Token validation failed: {str(e)}'}, 401
             
             if not current_user_id:
                 return {'error': 'Invalid token payload'}, 401
