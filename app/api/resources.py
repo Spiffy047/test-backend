@@ -42,25 +42,8 @@ class AuthResource(Resource):
 
 class AuthMeResource(Resource):
     def get(self):
-        """Get current user info - test endpoint"""
-        try:
-            # Test without JWT for now
-            user = User.query.get(16)  # Test user ID
-            
-            if not user:
-                return {'error': 'User not found'}, 404
-            
-            return {
-                'id': user.id,
-                'name': user.name,
-                'email': user.email,
-                'role': user.role,
-                'is_verified': user.is_verified,
-                'created_at': user.created_at.isoformat() if user.created_at else None
-            }
-            
-        except Exception as e:
-            return {'error': str(e)}, 500
+        """Simple test endpoint"""
+        return {'message': 'AuthMe endpoint works', 'status': 'ok'}
 
 class TicketListResource(Resource):
     def get(self):
