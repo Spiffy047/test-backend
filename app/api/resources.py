@@ -171,6 +171,10 @@ class TicketListResource(Resource):
     
     def post(self):
         try:
+            print(f"📝 Ticket creation request - Content-Type: {request.content_type}")
+            print(f"📝 Form data: {dict(request.form)}")
+            print(f"📝 Files: {list(request.files.keys())}")
+            
             # Handle both JSON and form data (for attachments)
             if request.content_type and 'multipart/form-data' in request.content_type:
                 # Form data with potential file upload
@@ -181,9 +185,17 @@ class TicketListResource(Resource):
                     'category': request.form.get('category'),
                     'created_by': int(request.form.get('created_by')) if request.form.get('created_by') else None
                 }
+                print(f"📝 Parsed form data: {data}")
             else:
                 # JSON data - skip schema validation to avoid strict category validation
-                json_data = request.get_json()
+                try:
+                    json_data = request.get_json(force=True)
+                    if not json_data:
+                        return {'error': 'No JSON data provided'}, 400
+                except Exception as e:
+                    print(f"❌ JSON parsing error: {e}")
+                    return {'error': f'Invalid JSON data: {str(e)}'}, 400
+                    
                 data = {
                     'title': json_data.get('title'),
                     'description': json_data.get('description'),
@@ -191,10 +203,24 @@ class TicketListResource(Resource):
                     'category': json_data.get('category'),
                     'created_by': json_data.get('created_by')
                 }
+                print(f"📝 Parsed JSON data: {data}")
             
-            # Validate required fields
-            if not all([data.get('title'), data.get('description'), data.get('priority'), data.get('category'), data.get('created_by')]):
-                return {'error': 'Missing required fields'}, 400
+            # Validate required fields with detailed error reporting
+            missing_fields = []
+            if not data.get('title'):
+                missing_fields.append('title')
+            if not data.get('description'):
+                missing_fields.append('description')
+            if not data.get('priority'):
+                missing_fields.append('priority')
+            if not data.get('category'):
+                missing_fields.append('category')
+            if not data.get('created_by'):
+                missing_fields.append('created_by')
+                
+            if missing_fields:
+                print(f"❌ Missing required fields: {missing_fields}")
+                return {'error': f'Missing required fields: {', '.join(missing_fields)}'}, 400
             
             # Get the highest ticket number from existing ticket_ids
             last_ticket = Ticket.query.filter(Ticket.ticket_id.like('TKT-%')).order_by(Ticket.ticket_id.desc()).first()
@@ -891,7 +917,7 @@ class ImageUploadResource(Resource):
         print(f"📁 ImageUpload - Available files: {list(request.files.keys())}")
         print(f"📁 ImageUpload - Form data: {dict(request.form)}")
         
-        # Enhanced file detection
+        # Enhanced file detection - check all possible field names
         image_file = None
         for field_name in ['image', 'file', 'attachment', 'document', 'upload']:
             if field_name in request.files:
@@ -912,36 +938,36 @@ class ImageUploadResource(Resource):
         if not image_file:
             available_files = list(request.files.keys())
             print(f"❌ No valid file found. Available fields: {available_files}")
-            return {'error': f'No file provided. Available fields: {available_files}'}, 400
+            return {'error': f'No image provided'}, 400
         
         ticket_id = request.form.get('ticket_id')
         user_id = request.form.get('user_id')
         
         if not ticket_id or not user_id:
-            return {'error': 'Missing required fields'}, 400
+            return {'error': 'Missing ticket_id or user_id'}, 400
         
-        # Allow all file types, not just images
         print(f"📎 Processing file: {image_file.filename} ({image_file.content_type})")
-        # Remove image-only restriction to allow all file types
         
         cloudinary_service = CloudinaryService()
         result = cloudinary_service.upload_image(image_file, ticket_id, user_id)
         
-        if result:
-            # Add image upload to timeline
+        if result and 'error' not in result:
+            # Add file upload to timeline
             try:
                 # Get ticket to add message to timeline
                 ticket = Ticket.query.filter_by(ticket_id=ticket_id).first()
                 if ticket:
-                    # Create timeline message for image upload
+                    # Create timeline message for file upload
+                    file_size_kb = result.get('bytes', 0) // 1024
                     message = Message(
                         ticket_id=ticket.id,
                         sender_id=int(user_id),
-                        message=f'Uploaded image: {image_file.filename} ({result.get("bytes", 0) // 1024} KB)'
+                        message=f'📎 Uploaded file: {image_file.filename} ({file_size_kb} KB)'
                     )
                     db.session.add(message)
                     db.session.commit()
                     db.session.refresh(message)
+                    print(f"✅ Timeline updated with file upload: {image_file.filename}")
             except Exception as e:
                 print(f"Timeline update failed: {e}")
             
@@ -949,9 +975,80 @@ class ImageUploadResource(Resource):
                 'success': True,
                 'url': result['url'],
                 'public_id': result['public_id'],
-                'width': result['width'],
-                'height': result['height']
+                'width': result.get('width', 0),
+                'height': result.get('height', 0),
+                'file_url': result['url']
             }
         else:
-            return {'error': 'Upload failed'}, 500
+            error_msg = result.get('error', 'Upload failed') if result else 'Upload failed'
+            print(f"❌ Upload failed: {error_msg}")
+            return {'error': error_msg}, 500
+
+class FileUploadResource(Resource):
+    def post(self):
+        """Alternative file upload endpoint for /files/upload"""
+        from flask import request
+        from app.services.cloudinary_service import CloudinaryService
+        
+        print(f"📁 FileUpload - Available files: {list(request.files.keys())}")
+        print(f"📁 FileUpload - Form data: {dict(request.form)}")
+        
+        # Enhanced file detection
+        upload_file = None
+        for field_name in ['file', 'image', 'attachment', 'document', 'upload']:
+            if field_name in request.files:
+                file = request.files[field_name]
+                if file and file.filename and file.filename.strip():
+                    upload_file = file
+                    print(f"✅ Found file: {file.filename} in field '{field_name}'")
+                    break
+        
+        if not upload_file:
+            for field_name, file in request.files.items():
+                if file and file.filename and file.filename.strip():
+                    upload_file = file
+                    print(f"✅ Using fallback file: {file.filename} from field '{field_name}'")
+                    break
+        
+        if not upload_file:
+            return {'error': 'No image provided'}, 400
+        
+        ticket_id = request.form.get('ticket_id')
+        user_id = request.form.get('user_id')
+        
+        if not ticket_id or not user_id:
+            return {'error': 'Missing ticket_id or user_id'}, 400
+        
+        print(f"📎 Processing file: {upload_file.filename} ({upload_file.content_type})")
+        
+        cloudinary_service = CloudinaryService()
+        result = cloudinary_service.upload_image(upload_file, ticket_id, user_id)
+        
+        if result and 'error' not in result:
+            # Add file upload to timeline
+            try:
+                ticket = Ticket.query.filter_by(ticket_id=ticket_id).first()
+                if ticket:
+                    file_size_kb = result.get('bytes', 0) // 1024
+                    message = Message(
+                        ticket_id=ticket.id,
+                        sender_id=int(user_id),
+                        message=f'📎 Uploaded file: {upload_file.filename} ({file_size_kb} KB)'
+                    )
+                    db.session.add(message)
+                    db.session.commit()
+                    db.session.refresh(message)
+                    print(f"✅ Timeline updated with file upload: {upload_file.filename}")
+            except Exception as e:
+                print(f"Timeline update failed: {e}")
+            
+            return {
+                'success': True,
+                'url': result['url'],
+                'file_url': result['url'],
+                'public_id': result['public_id']
+            }
+        else:
+            error_msg = result.get('error', 'Upload failed') if result else 'Upload failed'
+            return {'error': error_msg}, 500
 
