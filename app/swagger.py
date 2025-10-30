@@ -9,21 +9,7 @@ api = Api(
     swagger_bp,
     version='3.0',
     title='IT ServiceDesk API',
-    description='''
-    Complete REST API for IT ServiceDesk Platform with intelligent auto-assignment,
-    advanced file upload system, and comprehensive analytics.
-    
-    **Live Deployment:** https://hotfix.onrender.com/api
-    **Frontend:** https://hotfix-ochre.vercel.app
-    
-    **Key Features:**
-    - Intelligent auto-assignment based on agent workload
-    - Multi-endpoint file upload with Cloudinary integration
-    - Real-time messaging and timeline updates
-    - Role-based access control (4 user roles)
-    - SLA tracking and violation alerts
-    - Comprehensive analytics and reporting
-    ''',
+    description='Complete REST API for IT ServiceDesk Platform with intelligent auto-assignment, advanced file upload system, and comprehensive analytics. Live at https://hotfix.onrender.com/api with frontend at https://hotfix-ochre.vercel.app',
     doc='/',
     contact={
         'name': 'IT ServiceDesk Support',
@@ -567,10 +553,7 @@ class TimelineDoc(Resource):
                          404: 'Ticket not found'
                      })
     def get(self, ticket_id):
-        """Get complete ticket timeline with messages and activities
-        
-        Returns chronological list of all ticket interactions.
-        """
+        """Get complete ticket timeline with messages and activities"""
         return [{
             'id': 123,
             'ticket_id': 'TKT-1001',
@@ -657,32 +640,11 @@ class AgentWorkloadDoc(Resource):
             'closed_tickets': 45
         }]
 
-# System Information
-@api.documentation
-def custom_doc():
-    return {
-        'info': {
-            'description': '''
-            ## System Architecture
-            
-            **Database:** PostgreSQL with 13+ tables and 54+ tickets
-            **File Storage:** Cloudinary with automatic optimization
-            **Authentication:** JWT with fallback support
-            **Real-time:** Polling-based updates
-            
-            ## Key Features
-            
-            - **Intelligent Auto-Assignment:** Workload-based ticket distribution
-            - **Multi-Endpoint File Upload:** Supports ticket creation and timeline uploads
-            - **Agent Name Resolution:** Displays actual names instead of IDs
-            - **SLA Tracking:** Real-time violation detection and alerts
-            - **Role-Based Access:** 4 distinct user roles with specific permissions
-            
-            ## Live Deployment
-            
-            - **API Base:** https://hotfix.onrender.com/api
-            - **Frontend:** https://hotfix-ochre.vercel.app
-            - **Documentation:** https://hotfix.onrender.com/api/docs
-            '''
-        }
-    }
+# Additional endpoints available in main API:
+# - /api/messages - Message management
+# - /api/tickets/{id}/timeline - Ticket timeline
+# - /api/files/upload - File upload with timeline integration
+# - /api/export/tickets - CSV export
+# 
+# Live API: https://hotfix.onrender.com/api
+# Frontend: https://hotfix-ochre.vercel.app
