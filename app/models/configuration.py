@@ -1,6 +1,6 @@
 """
 Configuration models for dynamic system settings
-Removes hardcoded values and makes the system configurable via database
+
 """
 
 from app import db

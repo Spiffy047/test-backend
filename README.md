@@ -57,10 +57,7 @@ pip install -r requirements.txt
 cp .env.example .env
 # Edit .env with your configuration
 
-# Initialize database
-python init_postgres_db.py
-
-# Run development server
+# Run development server (auto-initializes database)
 python app.py
 ```
 
@@ -117,22 +114,25 @@ Visit `/api/docs/` for complete Swagger documentation with interactive testing.
 
 ```
 app/
-├── __init__.py              # Application factory
-├── models/                  # Database models
-│   ├── user.py
-│   ├── ticket.py
-│   ├── attachment.py
-│   └── ...
-├── routes/                  # Route blueprints
-│   ├── auth.py
-│   ├── tickets.py
-│   ├── users.py
-│   ├── files.py
-│   └── ...
-├── services/                # Business logic
-│   └── cloudinary_service.py
-├── api/                     # RESTful API resources
-└── swagger.py               # API documentation
+├── __init__.py                    # Application factory
+├── models.py                      # Core database models
+├── models/
+│   └── configuration.py           # Configuration models
+├── api/
+│   ├── __init__.py               # API blueprint
+│   ├── resources.py              # Main API resources
+│   └── resources/                # Individual resource modules
+├── routes/                       # Additional route blueprints
+│   ├── admin.py
+│   ├── config.py
+│   ├── db_init.py
+│   └── files.py
+├── services/                     # Business logic services
+│   ├── cloudinary_service.py
+│   ├── configuration_service.py
+│   └── email_service.py
+├── schemas.py                    # Data validation schemas
+└── swagger.py                    # API documentation
 ```
 
 ## 🔐 Security Features

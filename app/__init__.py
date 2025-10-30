@@ -69,8 +69,8 @@ def create_app(config_name='default'):
                 
                 # Initialize configuration tables (safe - won't affect existing data)
                 try:
-                    from app.services.config_service import ConfigService
-                    ConfigService.init_config()
+                    from app.services.configuration_service import ConfigurationService
+                    ConfigurationService.initialize_default_configuration()
                     print("✅ Configuration tables initialized")
                 except Exception as config_error:
                     print(f"⚠️ Configuration init warning: {config_error}")
