@@ -648,22 +648,30 @@ class ImageUploadResource(Resource):
         from flask import request
         from app.services.cloudinary_service import CloudinaryService
         
-        if 'image' not in request.files:
+        # Check for image in multiple possible field names
+        image_file = None
+        for field_name in ['image', 'file', 'attachment']:
+            if field_name in request.files:
+                file = request.files[field_name]
+                if file and file.filename:
+                    image_file = file
+                    break
+        
+        if not image_file:
             return {'error': 'No image provided'}, 400
         
-        file = request.files['image']
         ticket_id = request.form.get('ticket_id')
         user_id = request.form.get('user_id')
         
-        if not file or not ticket_id or not user_id:
+        if not ticket_id or not user_id:
             return {'error': 'Missing required fields'}, 400
         
         # Check if file is an image
-        if not file.content_type.startswith('image/'):
+        if not image_file.content_type.startswith('image/'):
             return {'error': 'File must be an image'}, 400
         
         cloudinary_service = CloudinaryService()
-        result = cloudinary_service.upload_image(file, ticket_id, user_id)
+        result = cloudinary_service.upload_image(image_file, ticket_id, user_id)
         
         if result:
             # Add image upload to timeline
@@ -675,7 +683,7 @@ class ImageUploadResource(Resource):
                     message = Message(
                         ticket_id=ticket.id,
                         sender_id=int(user_id),
-                        message=f'Uploaded image: {file.filename} ({result.get("bytes", 0) // 1024} KB)'
+                        message=f'Uploaded image: {image_file.filename} ({result.get("bytes", 0) // 1024} KB)'
                     )
                     db.session.add(message)
                     db.session.commit()
