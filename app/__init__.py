@@ -232,35 +232,41 @@ def create_app(config_name='default'):
     
     @app.route('/api/agents/performance')
     def agent_performance():
-        """Get basic agent performance metrics from database"""
+        """Get basic agent performance metrics from database - shows all agents"""
         try:
             from sqlalchemy import text
             
             result = db.session.execute(text("""
                 SELECT 
-                    u.id, u.name, u.email,
-                    COUNT(CASE WHEN t.status IN ('Resolved', 'Closed') THEN 1 END) as tickets_closed,
-                    AVG(CASE WHEN t.status IN ('Resolved', 'Closed') AND t.resolved_at IS NOT NULL THEN 
-                        EXTRACT(EPOCH FROM (t.resolved_at - t.created_at))/3600 END) as avg_handle_time,
-                    COUNT(CASE WHEN t.sla_violated = true THEN 1 END) as sla_violations
+                    u.id, u.name, u.email, u.role,
+                    COALESCE(COUNT(CASE WHEN t.status IN ('Resolved', 'Closed') THEN 1 END), 0) as tickets_closed,
+                    COALESCE(AVG(CASE WHEN t.status IN ('Resolved', 'Closed') AND t.resolved_at IS NOT NULL THEN 
+                        EXTRACT(EPOCH FROM (t.resolved_at - t.created_at))/3600 END), 0) as avg_handle_time,
+                    COALESCE(COUNT(CASE WHEN t.sla_violated = true THEN 1 END), 0) as sla_violations,
+                    COALESCE(COUNT(CASE WHEN t.assigned_to = u.id THEN 1 END), 0) as total_assigned
                 FROM users u
                 LEFT JOIN tickets t ON u.id = t.assigned_to
                 WHERE u.role IN ('Technical User', 'Technical Supervisor')
-                GROUP BY u.id, u.name, u.email
+                GROUP BY u.id, u.name, u.email, u.role
+                ORDER BY u.name
             """))
             
             agents = []
             for row in result:
-                closed = row[3] or 0
-                violations = row[5] or 0
+                closed = row[4] or 0
+                violations = row[6] or 0
+                total_assigned = row[7] or 0
                 score = max(0, (closed * 10) - (violations * 5))
                 rating = 'Excellent' if score >= 50 else 'Good' if score >= 30 else 'Average' if score >= 15 else 'Needs Improvement'
                 
                 agents.append({
                     'id': row[0],
                     'name': row[1],
+                    'email': row[2],
+                    'role': row[3],
                     'tickets_closed': closed,
-                    'avg_handle_time': round(row[4] or 0, 1),
+                    'total_assigned': total_assigned,
+                    'avg_handle_time': round(row[5] or 0, 1),
                     'sla_violations': violations,
                     'rating': rating
                 })
@@ -377,29 +383,33 @@ def create_app(config_name='default'):
             
             result = db.session.execute(text("""
                 SELECT 
-                    t.assigned_to,
+                    u.id,
                     u.name,
                     u.email,
-                    COUNT(*) as total_tickets,
-                    COUNT(CASE WHEN t.status NOT IN ('Resolved', 'Closed') THEN 1 END) as active_tickets,
-                    COUNT(CASE WHEN t.status = 'Pending' THEN 1 END) as pending_tickets,
-                    COUNT(CASE WHEN t.status IN ('Resolved', 'Closed') THEN 1 END) as closed_tickets
-                FROM tickets t
-                LEFT JOIN users u ON t.assigned_to = u.id
-                WHERE t.assigned_to IS NOT NULL
-                GROUP BY t.assigned_to, u.name, u.email
+                    u.role,
+                    COALESCE(COUNT(t.id), 0) as total_tickets,
+                    COALESCE(COUNT(CASE WHEN t.status NOT IN ('Resolved', 'Closed') THEN 1 END), 0) as active_tickets,
+                    COALESCE(COUNT(CASE WHEN t.status = 'Pending' THEN 1 END), 0) as pending_tickets,
+                    COALESCE(COUNT(CASE WHEN t.status IN ('Resolved', 'Closed') THEN 1 END), 0) as closed_tickets
+                FROM users u
+                LEFT JOIN tickets t ON u.id = t.assigned_to
+                WHERE u.role IN ('Technical User', 'Technical Supervisor')
+                GROUP BY u.id, u.name, u.email, u.role
+                ORDER BY u.name
             """))
             
             agents = []
             for row in result:
                 agents.append({
                     'agent_id': row[0],
-                    'name': row[1] or f'Agent {row[0]}',
-                    'email': row[2] or f'agent{row[0]}@company.com',
-                    'ticket_count': row[3],
-                    'active_tickets': row[4],
-                    'pending_tickets': row[5],
-                    'closed_tickets': row[6]
+                    'id': row[0],
+                    'name': row[1],
+                    'email': row[2],
+                    'role': row[3],
+                    'ticket_count': row[4],
+                    'active_tickets': row[5],
+                    'pending_tickets': row[6],
+                    'closed_tickets': row[7]
                 })
             
             return agents
@@ -414,35 +424,38 @@ def create_app(config_name='default'):
             
             result = db.session.execute(text("""
                 SELECT 
-                    t.assigned_to,
+                    u.id,
                     u.name,
                     u.email,
-                    COUNT(CASE WHEN t.status NOT IN ('Resolved', 'Closed') THEN 1 END) as active_tickets,
-                    COUNT(CASE WHEN t.status IN ('Resolved', 'Closed') THEN 1 END) as closed_tickets,
-                    COUNT(CASE WHEN t.sla_violated = true THEN 1 END) as sla_violations,
-                    AVG(CASE WHEN t.status IN ('Resolved', 'Closed') THEN 
-                        EXTRACT(EPOCH FROM (t.updated_at - t.created_at))/3600 END) as avg_handle_time
-                FROM tickets t
-                LEFT JOIN users u ON t.assigned_to = u.id
-                WHERE t.assigned_to IS NOT NULL
-                GROUP BY t.assigned_to, u.name, u.email
+                    u.role,
+                    COALESCE(COUNT(CASE WHEN t.status NOT IN ('Resolved', 'Closed') THEN 1 END), 0) as active_tickets,
+                    COALESCE(COUNT(CASE WHEN t.status IN ('Resolved', 'Closed') THEN 1 END), 0) as closed_tickets,
+                    COALESCE(COUNT(CASE WHEN t.sla_violated = true THEN 1 END), 0) as sla_violations,
+                    COALESCE(AVG(CASE WHEN t.status IN ('Resolved', 'Closed') THEN 
+                        EXTRACT(EPOCH FROM (t.updated_at - t.created_at))/3600 END), 0) as avg_handle_time
+                FROM users u
+                LEFT JOIN tickets t ON u.id = t.assigned_to
+                WHERE u.role IN ('Technical User', 'Technical Supervisor')
+                GROUP BY u.id, u.name, u.email, u.role
+                ORDER BY u.name
             """))
             
             agents = []
             for row in result:
-                closed_tickets = row[4] or 0
-                sla_violations = row[5] or 0
+                closed_tickets = row[5] or 0
+                sla_violations = row[6] or 0
                 score = max(0, (closed_tickets * 10) - (sla_violations * 5))
                 rating = 'Excellent' if score >= 50 else 'Good' if score >= 30 else 'Average' if score >= 15 else 'Needs Improvement'
                 
                 agents.append({
                     'agent_id': row[0],
                     'id': row[0],
-                    'name': row[1] or f'Agent {row[0]}',
-                    'email': row[2] or f'agent{row[0]}@company.com',
-                    'active_tickets': row[3] or 0,
+                    'name': row[1],
+                    'email': row[2],
+                    'role': row[3],
+                    'active_tickets': row[4],
                     'closed_tickets': closed_tickets,
-                    'avg_handle_time': round(row[6] or 0, 1),
+                    'avg_handle_time': round(row[7] or 0, 1),
                     'sla_violations': sla_violations,
                     'rating': rating,
                     'performance_rating': rating,
