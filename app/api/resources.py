@@ -163,17 +163,25 @@ class TicketListResource(Resource):
             while Ticket.query.filter_by(ticket_id=f'TKT-{ticket_num}').first():
                 ticket_num += 1
             
+            # Auto-assign to agent with least workload
+            assigned_to = self._auto_assign_ticket(data['priority'])
+            
             ticket = Ticket(
                 ticket_id=f'TKT-{ticket_num:04d}',
                 title=data['title'],
                 description=data['description'],
                 priority=data['priority'],
                 category=data['category'],
-                created_by=data['created_by']
+                created_by=data['created_by'],
+                assigned_to=assigned_to
             )
             
             db.session.add(ticket)
             db.session.commit()
+            
+            # Create alert for assigned agent
+            if assigned_to:
+                self._create_assignment_alert(ticket, assigned_to)
             
             # Handle file attachment if present - check multiple field names
             attachment_file = None
@@ -242,6 +250,49 @@ class TicketListResource(Resource):
             import traceback
             traceback.print_exc()
             return {'error': f'Ticket creation failed: {str(e)}'}, 500
+    
+    def _auto_assign_ticket(self, priority):
+        """Auto-assign ticket to agent with least workload"""
+        try:
+            from sqlalchemy import text
+            
+            # Get agents with their current workload
+            result = db.session.execute(text("""
+                SELECT u.id, u.name, COUNT(t.id) as workload
+                FROM users u
+                LEFT JOIN tickets t ON u.id = t.assigned_to AND t.status NOT IN ('Resolved', 'Closed')
+                WHERE u.role IN ('Technical User', 'Technical Supervisor')
+                GROUP BY u.id, u.name
+                ORDER BY workload ASC, u.id ASC
+                LIMIT 1
+            """))
+            
+            agent = result.fetchone()
+            return agent[0] if agent else None
+            
+        except Exception as e:
+            print(f"Auto-assignment failed: {e}")
+            return None
+    
+    def _create_assignment_alert(self, ticket, agent_id):
+        """Create alert for ticket assignment"""
+        try:
+            from app.models import Alert
+            
+            alert = Alert(
+                user_id=agent_id,
+                ticket_id=ticket.id,
+                alert_type='assignment',
+                title=f'New Ticket Assigned: {ticket.ticket_id}',
+                message=f'You have been assigned ticket {ticket.ticket_id}: {ticket.title}'
+            )
+            
+            db.session.add(alert)
+            db.session.commit()
+            print(f"Alert created for agent {agent_id}")
+            
+        except Exception as e:
+            print(f"Alert creation failed: {e}")
 
 class TicketResource(Resource):
     def get(self, ticket_id):
