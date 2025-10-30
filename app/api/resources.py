@@ -41,11 +41,28 @@ class AuthResource(Resource):
             return {'success': False, 'message': str(e)}, 500
 
 class AuthMeResource(Resource):
-    @jwt_required()
     def get(self):
-        """Get current user info from JWT token"""
+        """Get current user info from JWT token - custom validation"""
         try:
-            current_user_id = get_jwt_identity()
+            # Custom JWT validation without decorator
+            auth_header = request.headers.get('Authorization')
+            if not auth_header or not auth_header.startswith('Bearer '):
+                return {'error': 'Authorization token required'}, 401
+            
+            token = auth_header.split(' ')[1]
+            
+            # Decode JWT manually
+            import jwt
+            try:
+                payload = jwt.decode(token, 'hardcoded-jwt-secret-key-for-testing-12345', algorithms=['HS256'])
+                current_user_id = payload.get('sub')
+            except jwt.ExpiredSignatureError:
+                return {'error': 'Token has expired'}, 401
+            except jwt.InvalidTokenError:
+                return {'error': 'Invalid token'}, 401
+            
+            if not current_user_id:
+                return {'error': 'Invalid token payload'}, 401
             
             # Use raw SQL to avoid ORM issues
             from sqlalchemy import text
