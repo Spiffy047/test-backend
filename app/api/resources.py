@@ -462,6 +462,24 @@ class MigrateTicketIDsResource(Resource):
             db.session.rollback()
             return {'success': False, 'error': str(e)}, 500
 
+class AssignableAgentsResource(Resource):
+    def get(self):
+        """Get all agents that can be assigned tickets (Technical Users and Technical Supervisors)"""
+        try:
+            agents = User.query.filter(
+                User.role.in_(['Technical User', 'Technical Supervisor'])
+            ).order_by(User.name).all()
+            
+            return [{
+                'id': agent.id,
+                'name': agent.name,
+                'email': agent.email,
+                'role': agent.role
+            } for agent in agents]
+            
+        except Exception as e:
+            return {'error': f'Failed to fetch agents: {str(e)}'}, 500
+
 class ImageUploadResource(Resource):
     def post(self):
         from flask import request
