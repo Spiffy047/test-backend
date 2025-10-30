@@ -41,23 +41,30 @@ class AuthResource(Resource):
             return {'success': False, 'message': str(e)}, 500
 
 class AuthMeResource(Resource):
+    @jwt_required()
     def get(self):
-        """Get current user info from token (for frontend auth check)"""
+        """Get current user info from JWT token"""
         try:
-            # For now, return a simple response since JWT is disabled
-            # In production, this would validate the JWT token
-            token = request.headers.get('Authorization', '').replace('Bearer ', '')
-            if not token:
-                return {'error': 'No token provided'}, 401
+            current_user_id = get_jwt_identity()
+            user = User.query.get(current_user_id)
             
-            # Since JWT is disabled, we can't validate the token properly
-            # Return a generic response for now
-            return {'error': 'Token validation not implemented'}, 501
+            if not user:
+                return {'error': 'User not found'}, 404
+            
+            return {
+                'id': user.id,
+                'name': user.name,
+                'email': user.email,
+                'role': user.role,
+                'is_verified': user.is_verified,
+                'created_at': user.created_at.isoformat() if user.created_at else None
+            }
             
         except Exception as e:
             return {'error': str(e)}, 500
 
 class TicketListResource(Resource):
+    @jwt_required()
     def get(self):
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 10, type=int)
@@ -87,6 +94,7 @@ class TicketListResource(Resource):
             }
         }
     
+    @jwt_required()
     def post(self):
         try:
             # Handle both JSON and form data (for attachments)
@@ -195,6 +203,7 @@ class TicketListResource(Resource):
             return {'error': f'Ticket creation failed: {str(e)}'}, 500
 
 class TicketResource(Resource):
+    @jwt_required()
     def get(self, ticket_id):
         try:
             # Try to find by ticket_id first (TKT-XXXX format)
@@ -207,6 +216,7 @@ class TicketResource(Resource):
         except Exception as e:
             return {'error': f'Ticket not found: {str(e)}'}, 404
     
+    @jwt_required()
     def put(self, ticket_id):
         try:
             # Try to find by ticket_id first (TKT-XXXX format)
@@ -231,6 +241,7 @@ class TicketResource(Resource):
         except Exception as e:
             return {'error': f'Update failed: {str(e)}'}, 500
     
+    @jwt_required()
     def delete(self, ticket_id):
         try:
             # Try to find by ticket_id first (TKT-XXXX format)
@@ -247,6 +258,7 @@ class TicketResource(Resource):
             return {'error': str(e)}, 500
 
 class UserListResource(Resource):
+    @jwt_required()
     def get(self):
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 50, type=int)  # Increased default to show all users
@@ -329,6 +341,7 @@ class UserResource(Resource):
             return {'error': str(e)}, 500
 
 class MessageListResource(Resource):
+    @jwt_required()
     def post(self):
         try:
             data = request.get_json()

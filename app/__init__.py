@@ -85,8 +85,26 @@ def create_app(config_name='default'):
     
     # === EXTENSION INITIALIZATION ===
     # Initialize remaining Flask extensions
-    jwt.init_app(app)  # JWT authentication (currently disabled for deployment)
+    
+    # JWT Configuration - CRITICAL: Set secret key before initializing
+    app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = False  # Tokens don't expire for demo
+    
+    jwt.init_app(app)  # JWT authentication
     ma.init_app(app)   # Marshmallow serialization
+    
+    # JWT Error Handlers - Prevent 500 errors
+    @jwt.expired_token_loader
+    def expired_token_callback(jwt_header, jwt_payload):
+        return {'error': 'Token has expired'}, 401
+    
+    @jwt.invalid_token_loader
+    def invalid_token_callback(error):
+        return {'error': 'Invalid token'}, 401
+    
+    @jwt.unauthorized_loader
+    def missing_token_callback(error):
+        return {'error': 'Authorization token required'}, 401
     
     # Note: Swagger/OpenAPI documentation disabled for deployment stability
     
