@@ -87,7 +87,7 @@ def create_app(config_name='default'):
     # Initialize remaining Flask extensions
     
     # JWT Configuration - CRITICAL: Set secret key before initializing
-    app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
+    app.config['JWT_SECRET_KEY'] = 'hardcoded-jwt-secret-key-for-testing-12345'
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = False  # Tokens don't expire for demo
     
     jwt.init_app(app)  # JWT authentication

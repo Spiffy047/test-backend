@@ -64,6 +64,7 @@ class AuthMeResource(Resource):
             return {'error': str(e)}, 500
 
 class TicketListResource(Resource):
+    @jwt_required()
     def get(self):
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 10, type=int)
@@ -81,8 +82,26 @@ class TicketListResource(Resource):
         
         paginated = query.paginate(page=page, per_page=per_page, error_out=False)
         
+        tickets = []
+        for ticket in paginated.items:
+            tickets.append({
+                'id': ticket.id,
+                'ticket_id': ticket.ticket_id,
+                'title': ticket.title,
+                'description': ticket.description,
+                'status': ticket.status,
+                'priority': ticket.priority,
+                'category': ticket.category,
+                'created_by': ticket.created_by,
+                'assigned_to': ticket.assigned_to,
+                'created_at': ticket.created_at.isoformat() if ticket.created_at else None,
+                'updated_at': ticket.updated_at.isoformat() if ticket.updated_at else None,
+                'resolved_at': ticket.resolved_at.isoformat() if ticket.resolved_at else None,
+                'sla_violated': ticket.sla_violated
+            })
+        
         return {
-            'tickets': tickets_schema.dump(paginated.items),
+            'tickets': tickets,
             'pagination': {
                 'page': page,
                 'per_page': per_page,
@@ -192,7 +211,20 @@ class TicketListResource(Resource):
             except Exception as e:
                 print(f"Email notification failed: {e}")
             
-            return ticket_schema.dump(ticket), 201
+            return {
+                'id': ticket.id,
+                'ticket_id': ticket.ticket_id,
+                'title': ticket.title,
+                'description': ticket.description,
+                'status': ticket.status,
+                'priority': ticket.priority,
+                'category': ticket.category,
+                'created_by': ticket.created_by,
+                'assigned_to': ticket.assigned_to,
+                'created_at': ticket.created_at.isoformat() if ticket.created_at else None,
+                'updated_at': ticket.updated_at.isoformat() if ticket.updated_at else None,
+                'sla_violated': ticket.sla_violated
+            }, 201
             
         except Exception as e:
             db.session.rollback()
@@ -211,7 +243,21 @@ class TicketResource(Resource):
                 # Try to find by numeric ID
                 ticket = Ticket.query.get_or_404(ticket_id)
             
-            return ticket_schema.dump(ticket)
+            return {
+                'id': ticket.id,
+                'ticket_id': ticket.ticket_id,
+                'title': ticket.title,
+                'description': ticket.description,
+                'status': ticket.status,
+                'priority': ticket.priority,
+                'category': ticket.category,
+                'created_by': ticket.created_by,
+                'assigned_to': ticket.assigned_to,
+                'created_at': ticket.created_at.isoformat() if ticket.created_at else None,
+                'updated_at': ticket.updated_at.isoformat() if ticket.updated_at else None,
+                'resolved_at': ticket.resolved_at.isoformat() if ticket.resolved_at else None,
+                'sla_violated': ticket.sla_violated
+            }
         except Exception as e:
             return {'error': f'Ticket not found: {str(e)}'}, 404
     
@@ -235,7 +281,21 @@ class TicketResource(Resource):
                 ticket.priority = data['priority']
             
             db.session.commit()
-            return ticket_schema.dump(ticket)
+            return {
+                'id': ticket.id,
+                'ticket_id': ticket.ticket_id,
+                'title': ticket.title,
+                'description': ticket.description,
+                'status': ticket.status,
+                'priority': ticket.priority,
+                'category': ticket.category,
+                'created_by': ticket.created_by,
+                'assigned_to': ticket.assigned_to,
+                'created_at': ticket.created_at.isoformat() if ticket.created_at else None,
+                'updated_at': ticket.updated_at.isoformat() if ticket.updated_at else None,
+                'resolved_at': ticket.resolved_at.isoformat() if ticket.resolved_at else None,
+                'sla_violated': ticket.sla_violated
+            }
             
         except Exception as e:
             return {'error': f'Update failed: {str(e)}'}, 500
