@@ -24,7 +24,7 @@ api = Api(
     - SLA tracking and violation alerts
     - Comprehensive analytics and reporting
     ''',
-    doc='/docs/',
+    doc='/',
     contact={
         'name': 'IT ServiceDesk Support',
         'email': 'mwanikijoe1@gmail.com'
