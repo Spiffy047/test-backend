@@ -37,12 +37,12 @@ class NotificationService:
             db.session.add(alert)
             db.session.commit()
             
-            print(f"✅ Alert created: {title} for user {user.name}")
+            print(f"[SUCCESS] Alert created: {title} for user {user.name}")
             return alert
             
         except Exception as e:
             db.session.rollback()
-            print(f"❌ Alert creation failed: {e}")
+            print(f"[ERROR] Alert creation failed: {e}")
             raise
     
     @staticmethod
@@ -126,7 +126,7 @@ class NotificationService:
             return alerts
             
         except Exception as e:
-            print(f"❌ Error fetching alerts for user {user_id}: {e}")
+            print(f"[ERROR] Error fetching alerts for user {user_id}: {e}")
             return []
     
     @staticmethod
@@ -147,7 +147,7 @@ class NotificationService:
             
         except Exception as e:
             db.session.rollback()
-            print(f"❌ Error marking alert {alert_id} as read: {e}")
+            print(f"[ERROR] Error marking alert {alert_id} as read: {e}")
             return False
     
     @staticmethod
@@ -164,7 +164,7 @@ class NotificationService:
             
         except Exception as e:
             db.session.rollback()
-            print(f"❌ Error marking all alerts as read for user {user_id}: {e}")
+            print(f"[ERROR] Error marking all alerts as read for user {user_id}: {e}")
             return False
     
     @staticmethod
@@ -180,7 +180,7 @@ class NotificationService:
             return result.scalar() or 0
             
         except Exception as e:
-            print(f"❌ Error getting alert count for user {user_id}: {e}")
+            print(f"[ERROR] Error getting alert count for user {user_id}: {e}")
             return 0
     
     @staticmethod
@@ -202,5 +202,5 @@ class NotificationService:
             
         except Exception as e:
             db.session.rollback()
-            print(f"❌ Error cleaning up old alerts: {e}")
+            print(f"[ERROR] Error cleaning up old alerts: {e}")
             return 0

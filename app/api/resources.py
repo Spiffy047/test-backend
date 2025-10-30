@@ -178,9 +178,9 @@ class TicketListResource(Resource):
     
     def post(self):
         try:
-            print(f"📝 Ticket creation request - Content-Type: {request.content_type}")
-            print(f"📝 Form data: {dict(request.form)}")
-            print(f"📝 Files: {list(request.files.keys())}")
+            print(f"Ticket creation request - Content-Type: {request.content_type}")
+            print(f"Form data: {dict(request.form)}")
+            print(f"Files: {list(request.files.keys())}")
             
             # Handle both JSON and form data (for attachments)
             if request.content_type and 'multipart/form-data' in request.content_type:
@@ -192,7 +192,7 @@ class TicketListResource(Resource):
                     'category': request.form.get('category'),
                     'created_by': int(request.form.get('created_by')) if request.form.get('created_by') else None
                 }
-                print(f"📝 Parsed form data: {data}")
+                print(f"Parsed form data: {data}")
             else:
                 # JSON data - skip schema validation to avoid strict category validation
                 try:
@@ -200,7 +200,7 @@ class TicketListResource(Resource):
                     if not json_data:
                         return {'error': 'No JSON data provided'}, 400
                 except Exception as e:
-                    print(f"❌ JSON parsing error: {e}")
+                    print(f"JSON parsing error: {e}")
                     return {'error': f'Invalid JSON data: {str(e)}'}, 400
                     
                 data = {
@@ -210,7 +210,7 @@ class TicketListResource(Resource):
                     'category': json_data.get('category'),
                     'created_by': json_data.get('created_by')
                 }
-                print(f"📝 Parsed JSON data: {data}")
+                print(f"Parsed JSON data: {data}")
             
             # Validate required fields with detailed error reporting
             missing_fields = []
@@ -226,7 +226,7 @@ class TicketListResource(Resource):
                 missing_fields.append('created_by')
                 
             if missing_fields:
-                print(f"❌ Missing required fields: {missing_fields}")
+                print(f"Missing required fields: {missing_fields}")
                 return {'error': f'Missing required fields: {", ".join(missing_fields)}'}, 400
             
             # Get the highest ticket number from existing ticket_ids
@@ -270,9 +270,9 @@ class TicketListResource(Resource):
                         ticket_title=ticket.title,
                         priority=ticket.priority
                     )
-                    print(f"✅ Enhanced alert created for agent {assigned_to}")
+                    print(f"Enhanced alert created for agent {assigned_to}")
                 except Exception as e:
-                    print(f"⚠️ Enhanced alert creation failed: {e}")
+                    print(f"Enhanced alert creation failed: {e}")
             else:
                 # Notify supervisors about unassigned ticket
                 try:
@@ -286,21 +286,21 @@ class TicketListResource(Resource):
                             ticket_title=ticket.title,
                             reason="No agents available for auto-assignment"
                         )
-                        print(f"⚠️ Supervisors notified about unassigned ticket {ticket.ticket_id}")
+                        print(f"Supervisors notified about unassigned ticket {ticket.ticket_id}")
                 except Exception as e:
-                    print(f"⚠️ Supervisor notification failed: {e}")
+                    print(f"Supervisor notification failed: {e}")
             
             # Enhanced file attachment detection
             attachment_file = None
             if request.content_type and 'multipart/form-data' in request.content_type:
-                print(f"📁 Form files available: {list(request.files.keys())}")
+                print(f"Form files available: {list(request.files.keys())}")
                 # Check for attachment in multiple possible field names
                 for field_name in ['attachment', 'file', 'image', 'document', 'upload']:
                     if field_name in request.files:
                         file = request.files[field_name]
                         if file and file.filename and file.filename.strip():
                             attachment_file = file
-                            print(f"✅ Found attachment: {file.filename} in field '{field_name}'")
+                            print(f"Found attachment: {file.filename} in field '{field_name}'")
                             break
                 
                 # If no specific field found, try any available file
@@ -308,12 +308,12 @@ class TicketListResource(Resource):
                     for field_name, file in request.files.items():
                         if file and file.filename and file.filename.strip():
                             attachment_file = file
-                            print(f"✅ Using fallback file: {file.filename} from field '{field_name}'")
+                            print(f"Using fallback file: {file.filename} from field '{field_name}'")
                             break
             
             if attachment_file:
                 try:
-                    print(f"📎 Processing attachment: {attachment_file.filename} ({attachment_file.content_type})")
+                    print(f"Processing attachment: {attachment_file.filename} ({attachment_file.content_type})")
                     from app.services.cloudinary_service import CloudinaryService
                     cloudinary_service = CloudinaryService()
                     result = cloudinary_service.upload_image(attachment_file, ticket.ticket_id, data['created_by'])
@@ -324,21 +324,21 @@ class TicketListResource(Resource):
                         message = Message(
                             ticket_id=ticket.id,
                             sender_id=data['created_by'],
-                            message=f'📎 Attached file: {attachment_file.filename} ({file_size_kb} KB)'
+                            message=f'Attached file: {attachment_file.filename} ({file_size_kb} KB)'
                         )
                         db.session.add(message)
                         db.session.commit()
                         db.session.refresh(message)
-                        print(f"✅ Attachment uploaded and timeline updated: {attachment_file.filename}")
+                        print(f"Attachment uploaded and timeline updated: {attachment_file.filename}")
                     else:
-                        print(f"❌ Cloudinary upload failed for: {attachment_file.filename}")
+                        print(f"Cloudinary upload failed for: {attachment_file.filename}")
                 except Exception as e:
-                    print(f"⚠️ Attachment upload failed: {e}")
+                    print(f"Attachment upload failed: {e}")
                     import traceback
                     traceback.print_exc()
                     # Don't fail ticket creation if attachment fails
             else:
-                print(f"ℹ️ No attachment file found in request")
+                print(f"No attachment file found in request")
             
             # Send email notification
             try:
@@ -371,7 +371,7 @@ class TicketListResource(Resource):
             
         except Exception as e:
             db.session.rollback()
-            print(f"❌ Ticket creation error: {str(e)}")
+            print(f"Ticket creation error: {str(e)}")
             import traceback
             traceback.print_exc()
             return {'error': f'Ticket creation failed: {str(e)}'}, 500
@@ -394,10 +394,10 @@ class TicketListResource(Resource):
             
             agent = result.fetchone()
             if agent:
-                print(f"✅ Auto-assigned to agent: {agent[1]} (ID: {agent[0]}, workload: {agent[2]})")
+                print(f"Auto-assigned to agent: {agent[1]} (ID: {agent[0]}, workload: {agent[2]})")
                 return agent[0]
             else:
-                print(f"⚠️ No agents available for assignment")
+                print(f"No agents available for assignment")
                 return None
             
         except Exception as e:
@@ -618,18 +618,18 @@ class MessageListResource(Resource):
             if isinstance(ticket_id_param, int) or (isinstance(ticket_id_param, str) and ticket_id_param.isdigit()):
                 # If it's a numeric ID, find by internal ID
                 ticket = Ticket.query.get(int(ticket_id_param))
-                print(f"🔍 Looking for ticket by ID: {ticket_id_param}")
+                print(f" Looking for ticket by ID: {ticket_id_param}")
             
             if not ticket and isinstance(ticket_id_param, str):
                 # If it's a string, find by ticket_id (TKT-XXXX format)
                 ticket = Ticket.query.filter_by(ticket_id=str(ticket_id_param)).first()
-                print(f"🔍 Looking for ticket by ticket_id: {ticket_id_param}")
+                print(f" Looking for ticket by ticket_id: {ticket_id_param}")
             
             if not ticket:
-                print(f"❌ Ticket not found: {ticket_id_param}")
+                print(f" Ticket not found: {ticket_id_param}")
                 return {'error': f'Ticket not found: {ticket_id_param}'}, 404
             
-            print(f"✅ Found ticket: {ticket.ticket_id} (ID: {ticket.id})")
+            print(f" Found ticket: {ticket.ticket_id} (ID: {ticket.id})")
             
             # Create message in database
             message = Message(
@@ -640,7 +640,7 @@ class MessageListResource(Resource):
             
             db.session.add(message)
             db.session.commit()
-            print(f"✅ Message saved to database: ID {message.id}")
+            print(f" Message saved to database: ID {message.id}")
             
             # Get sender info
             sender = User.query.get(data.get('sender_id'))
@@ -656,19 +656,19 @@ class MessageListResource(Resource):
                 'type': 'message'
             }
             
-            print(f"✅ Message response: {response}")
+            print(f" Message response: {response}")
             # Force refresh timeline after message creation
             try:
                 db.session.refresh(message)
-                print(f"✅ Message committed and refreshed: {message.id}")
+                print(f" Message committed and refreshed: {message.id}")
             except Exception as refresh_error:
-                print(f"⚠️ Message refresh failed: {refresh_error}")
+                print(f" Message refresh failed: {refresh_error}")
             
             return response, 201
             
         except Exception as e:
             db.session.rollback()
-            print(f"❌ Message creation failed: {str(e)}")
+            print(f" Message creation failed: {str(e)}")
             return {'error': f'Failed to create message: {str(e)}'}, 500
 
 class AnalyticsResource(Resource):
@@ -926,8 +926,8 @@ class ImageUploadResource(Resource):
         from flask import request
         from app.services.cloudinary_service import CloudinaryService
         
-        print(f"📁 ImageUpload - Available files: {list(request.files.keys())}")
-        print(f"📁 ImageUpload - Form data: {dict(request.form)}")
+        print(f" ImageUpload - Available files: {list(request.files.keys())}")
+        print(f" ImageUpload - Form data: {dict(request.form)}")
         
         # Enhanced file detection - check all possible field names
         image_file = None
@@ -936,7 +936,7 @@ class ImageUploadResource(Resource):
                 file = request.files[field_name]
                 if file and file.filename and file.filename.strip():
                     image_file = file
-                    print(f"✅ Found file: {file.filename} in field '{field_name}'")
+                    print(f" Found file: {file.filename} in field '{field_name}'")
                     break
         
         # Fallback: try any available file
@@ -944,12 +944,12 @@ class ImageUploadResource(Resource):
             for field_name, file in request.files.items():
                 if file and file.filename and file.filename.strip():
                     image_file = file
-                    print(f"✅ Using fallback file: {file.filename} from field '{field_name}'")
+                    print(f" Using fallback file: {file.filename} from field '{field_name}'")
                     break
         
         if not image_file:
             available_files = list(request.files.keys())
-            print(f"❌ No valid file found. Available fields: {available_files}")
+            print(f" No valid file found. Available fields: {available_files}")
             return {'error': f'No image provided'}, 400
         
         ticket_id = request.form.get('ticket_id')
@@ -958,7 +958,7 @@ class ImageUploadResource(Resource):
         if not ticket_id or not user_id:
             return {'error': 'Missing ticket_id or user_id'}, 400
         
-        print(f"📎 Processing file: {image_file.filename} ({image_file.content_type})")
+        print(f" Processing file: {image_file.filename} ({image_file.content_type})")
         
         cloudinary_service = CloudinaryService()
         result = cloudinary_service.upload_image(image_file, ticket_id, user_id)
@@ -974,12 +974,12 @@ class ImageUploadResource(Resource):
                     message = Message(
                         ticket_id=ticket.id,
                         sender_id=int(user_id),
-                        message=f'📎 Uploaded file: {image_file.filename} ({file_size_kb} KB)'
+                        message=f' Uploaded file: {image_file.filename} ({file_size_kb} KB)'
                     )
                     db.session.add(message)
                     db.session.commit()
                     db.session.refresh(message)
-                    print(f"✅ Timeline updated with file upload: {image_file.filename}")
+                    print(f" Timeline updated with file upload: {image_file.filename}")
             except Exception as e:
                 print(f"Timeline update failed: {e}")
             
@@ -993,7 +993,7 @@ class ImageUploadResource(Resource):
             }
         else:
             error_msg = result.get('error', 'Upload failed') if result else 'Upload failed'
-            print(f"❌ Upload failed: {error_msg}")
+            print(f" Upload failed: {error_msg}")
             return {'error': error_msg}, 500
 
 class FileUploadResource(Resource):
@@ -1002,8 +1002,8 @@ class FileUploadResource(Resource):
         from flask import request
         from app.services.cloudinary_service import CloudinaryService
         
-        print(f"📁 FileUpload - Available files: {list(request.files.keys())}")
-        print(f"📁 FileUpload - Form data: {dict(request.form)}")
+        print(f" FileUpload - Available files: {list(request.files.keys())}")
+        print(f" FileUpload - Form data: {dict(request.form)}")
         
         # Enhanced file detection
         upload_file = None
@@ -1012,14 +1012,14 @@ class FileUploadResource(Resource):
                 file = request.files[field_name]
                 if file and file.filename and file.filename.strip():
                     upload_file = file
-                    print(f"✅ Found file: {file.filename} in field '{field_name}'")
+                    print(f" Found file: {file.filename} in field '{field_name}'")
                     break
         
         if not upload_file:
             for field_name, file in request.files.items():
                 if file and file.filename and file.filename.strip():
                     upload_file = file
-                    print(f"✅ Using fallback file: {file.filename} from field '{field_name}'")
+                    print(f" Using fallback file: {file.filename} from field '{field_name}'")
                     break
         
         if not upload_file:
@@ -1031,7 +1031,7 @@ class FileUploadResource(Resource):
         if not ticket_id or not user_id:
             return {'error': 'Missing ticket_id or user_id'}, 400
         
-        print(f"📎 Processing file: {upload_file.filename} ({upload_file.content_type})")
+        print(f" Processing file: {upload_file.filename} ({upload_file.content_type})")
         
         cloudinary_service = CloudinaryService()
         result = cloudinary_service.upload_image(upload_file, ticket_id, user_id)
@@ -1045,12 +1045,12 @@ class FileUploadResource(Resource):
                     message = Message(
                         ticket_id=ticket.id,
                         sender_id=int(user_id),
-                        message=f'📎 Uploaded file: {upload_file.filename} ({file_size_kb} KB)'
+                        message=f' Uploaded file: {upload_file.filename} ({file_size_kb} KB)'
                     )
                     db.session.add(message)
                     db.session.commit()
                     db.session.refresh(message)
-                    print(f"✅ Timeline updated with file upload: {upload_file.filename}")
+                    print(f" Timeline updated with file upload: {upload_file.filename}")
             except Exception as e:
                 print(f"Timeline update failed: {e}")
             

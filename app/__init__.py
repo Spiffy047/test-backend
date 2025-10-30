@@ -58,28 +58,28 @@ def create_app(config_name='default'):
         # Bind SQLAlchemy and Flask-Migrate to app
         db.init_app(app)
         migrate.init_app(app, db)
-        print("✅ Database initialized successfully")
+        print("[OK] Database initialized successfully")
         
         # Create database tables if they don't exist
         with app.app_context():
             try:
                 db.create_all()
-                print("✅ Database tables initialized successfully")
+                print("[OK] Database tables initialized successfully")
                 
                 # Initialize configuration tables (safe - won't affect existing data)
                 try:
                     from app.services.configuration_service import ConfigurationService
                     ConfigurationService.initialize_default_configuration()
-                    print("✅ Configuration tables initialized")
+                    print("[OK] Configuration tables initialized")
                 except Exception as config_error:
-                    print(f"⚠️ Configuration init warning: {config_error}")
+                    print(f"[WARNING] Configuration init warning: {config_error}")
             except Exception as e:
-                print(f"⚠️ Database table creation error: {e}")
+                print(f"[WARNING] Database table creation error: {e}")
                 
     except Exception as e:
-        print(f"❌ Database initialization failed: {e}")
+        print(f"[ERROR] Database initialization failed: {e}")
         # Fallback to in-memory SQLite for basic functionality
-        print("🔄 Falling back to in-memory SQLite database")
+        print("[RETRY] Falling back to in-memory SQLite database")
         app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         db.init_app(app)
     
@@ -125,22 +125,22 @@ def create_app(config_name='default'):
     # Configuration management
     from app.routes.config import config_bp
     app.register_blueprint(config_bp, url_prefix='/api/config')
-    print("✅ Configuration routes registered")
+    print("[OK] Configuration routes registered")
     
     # Database initialization
     from app.routes.db_init import db_init_bp
     app.register_blueprint(db_init_bp, url_prefix='/api/db')
-    print("✅ Database init routes registered")
+    print("[OK] Database init routes registered")
     
     # Main RESTful API endpoints (tickets, users, etc.) - MUST BE FIRST
     from app.api import api_bp
     app.register_blueprint(api_bp, url_prefix='/api')
-    print("✅ RESTful API routes registered")
+    print("[OK] RESTful API routes registered")
     
     # Register Swagger documentation (after API to avoid conflicts)
     from app.swagger import swagger_bp
     app.register_blueprint(swagger_bp, url_prefix='/api/docs')
-    print("✅ Swagger documentation registered at /api/docs/")
+    print("[OK] Swagger documentation registered at /api/docs/")
     
     # Administrative endpoints (system management)
     from app.routes.admin import admin_bp
