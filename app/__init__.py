@@ -207,6 +207,37 @@ def create_app(config_name='default'):
         except Exception as e:
             return {'error': str(e), 'users': []}
     
+    @app.route('/api/test/create-user', methods=['POST'])
+    def create_test_user():
+        """Create a test user for JWT testing"""
+        try:
+            from app.models import User
+            
+            # Check if test user already exists
+            existing = User.query.filter_by(email='test@test.com').first()
+            if existing:
+                return {'message': 'Test user already exists', 'email': 'test@test.com'}
+            
+            # Create test user
+            user = User(
+                name='Test User',
+                email='test@test.com',
+                role='System Admin'
+            )
+            user.set_password('test123')
+            
+            db.session.add(user)
+            db.session.commit()
+            
+            return {
+                'success': True,
+                'message': 'Test user created',
+                'email': 'test@test.com',
+                'password': 'test123'
+            }
+        except Exception as e:
+            return {'error': str(e)}, 500
+    
 
     
     # Note: Authentication endpoints moved to Flask-RESTful resources
