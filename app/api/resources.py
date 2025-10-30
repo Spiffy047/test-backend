@@ -1,6 +1,6 @@
 from flask import request
 from flask_restful import Resource
-from flask_jwt_extended import create_access_token
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from marshmallow import ValidationError
 from app import db
 from app.models import User, Ticket, Message
@@ -41,9 +41,33 @@ class AuthResource(Resource):
             return {'success': False, 'message': str(e)}, 500
 
 class AuthMeResource(Resource):
+    @jwt_required()
     def get(self):
-        """Simple test endpoint"""
-        return {'message': 'AuthMe endpoint works', 'status': 'ok'}
+        """Get current user info from JWT token"""
+        try:
+            current_user_id = get_jwt_identity()
+            
+            # Use raw SQL to avoid ORM issues
+            from sqlalchemy import text
+            result = db.session.execute(text(
+                "SELECT id, name, email, role, is_verified, created_at FROM users WHERE id = :user_id"
+            ), {'user_id': current_user_id})
+            
+            user_row = result.fetchone()
+            if not user_row:
+                return {'error': 'User not found'}, 404
+            
+            return {
+                'id': user_row[0],
+                'name': user_row[1],
+                'email': user_row[2],
+                'role': user_row[3],
+                'is_verified': user_row[4] if user_row[4] is not None else True,
+                'created_at': user_row[5].isoformat() if user_row[5] else None
+            }
+            
+        except Exception as e:
+            return {'error': str(e)}, 500
 
 class TicketListResource(Resource):
     def get(self):
