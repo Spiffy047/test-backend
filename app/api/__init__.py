@@ -18,7 +18,9 @@ from app.api.resources import (
     EmailVerificationResource,
     ImageUploadResource,
     MigrateTicketIDsResource,
-    AssignableAgentsResource
+    AssignableAgentsResource,
+    AlertResource,
+    AlertCountResource
 )
 
 # Register API resources
@@ -35,3 +37,5 @@ api.add_resource(EmailVerificationResource, '/auth/verify-email')
 api.add_resource(ImageUploadResource, '/upload/image')
 api.add_resource(MigrateTicketIDsResource, '/admin/migrate-ticket-ids')
 api.add_resource(AssignableAgentsResource, '/agents/assignable')
+api.add_resource(AlertResource, '/alerts/<int:user_id>')
+api.add_resource(AlertCountResource, '/alerts/<int:user_id>/count')
