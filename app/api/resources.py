@@ -175,16 +175,18 @@ class TicketListResource(Resource):
             db.session.add(ticket)
             db.session.commit()
             
-            # Handle file attachment if present (works for both form data and file uploads)
+            # Handle file attachment if present - check multiple field names
             attachment_file = None
             if request.content_type and 'multipart/form-data' in request.content_type:
-                # Check for attachment in form data
-                if 'attachment' in request.files:
-                    attachment_file = request.files['attachment']
-                elif 'file' in request.files:
-                    attachment_file = request.files['file']
+                # Check for attachment in multiple possible field names
+                for field_name in ['image', 'attachment', 'file']:
+                    if field_name in request.files:
+                        file = request.files[field_name]
+                        if file and file.filename:
+                            attachment_file = file
+                            break
             
-            if attachment_file and attachment_file.filename:
+            if attachment_file:
                 try:
                     from app.services.cloudinary_service import CloudinaryService
                     cloudinary_service = CloudinaryService()
@@ -328,8 +330,19 @@ class UserListResource(Resource):
         
         paginated = User.query.paginate(page=page, per_page=per_page, error_out=False)
         
+        users = []
+        for user in paginated.items:
+            users.append({
+                'id': user.id,
+                'name': user.name,
+                'email': user.email,
+                'role': user.role,
+                'is_verified': user.is_verified if user.is_verified is not None else True,
+                'created_at': user.created_at.isoformat() if user.created_at else None
+            })
+        
         return {
-            'users': users_schema.dump(paginated.items),
+            'users': users,
             'pagination': {
                 'page': page,
                 'per_page': per_page,
@@ -359,7 +372,14 @@ class UserListResource(Resource):
             db.session.add(user)
             db.session.commit()
             
-            return user_schema.dump(user), 201
+            return {
+                'id': user.id,
+                'name': user.name,
+                'email': user.email,
+                'role': user.role,
+                'is_verified': user.is_verified if user.is_verified is not None else True,
+                'created_at': user.created_at.isoformat() if user.created_at else None
+            }, 201
             
         except ValidationError as e:
             return {'error': 'Validation error', 'messages': e.messages}, 400
@@ -368,7 +388,14 @@ class UserResource(Resource):
     def get(self, user_id):
         try:
             user = User.query.get_or_404(user_id)
-            return user_schema.dump(user)
+            return {
+                'id': user.id,
+                'name': user.name,
+                'email': user.email,
+                'role': user.role,
+                'is_verified': user.is_verified if user.is_verified is not None else True,
+                'created_at': user.created_at.isoformat() if user.created_at else None
+            }
         except Exception as e:
             return {'error': f'User not found: {str(e)}'}, 404
     
@@ -387,7 +414,14 @@ class UserResource(Resource):
             user.role = data['role']
             
             db.session.commit()
-            return user_schema.dump(user)
+            return {
+                'id': user.id,
+                'name': user.name,
+                'email': user.email,
+                'role': user.role,
+                'is_verified': user.is_verified if user.is_verified is not None else True,
+                'created_at': user.created_at.isoformat() if user.created_at else None
+            }
             
         except ValidationError as e:
             return {'error': 'Validation error', 'messages': e.messages}, 400
