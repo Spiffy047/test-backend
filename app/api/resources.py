@@ -1,6 +1,6 @@
 from flask import request
 from flask_restful import Resource
-from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from flask_jwt_extended import create_access_token
 from marshmallow import ValidationError
 from app import db
 from app.models import User, Ticket, Message
@@ -311,7 +311,6 @@ class TicketResource(Resource):
             return {'error': str(e)}, 500
 
 class UserListResource(Resource):
-    @jwt_required()
     def get(self):
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 50, type=int)  # Increased default to show all users
@@ -394,7 +393,6 @@ class UserResource(Resource):
             return {'error': str(e)}, 500
 
 class MessageListResource(Resource):
-    @jwt_required()
     def post(self):
         try:
             data = request.get_json()
