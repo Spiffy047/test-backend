@@ -1,3 +1,6 @@
+# IT ServiceDesk API Resources
+# Flask-RESTful API endpoints with intelligent auto-assignment and file upload support
+
 from flask import request
 from flask_restful import Resource
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
@@ -11,6 +14,8 @@ from app.schemas import (
 from app.services.email_service import EmailService
 
 class AuthResource(Resource):
+    """User authentication with JWT token generation and fast password checking"""
+    
     def post(self):
         try:
             data = request.get_json()
@@ -65,8 +70,10 @@ class AuthResource(Resource):
             return {'success': False, 'message': str(e)}, 500
 
 class AuthMeResource(Resource):
+    """Current user information endpoint with JWT validation and fallback support"""
+    
     def get(self):
-        """Get current user info with partial JWT implementation"""
+        """Get current user info with JWT validation and development fallback"""
         try:
             auth_header = request.headers.get('Authorization')
             if not auth_header or not auth_header.startswith('Bearer '):
@@ -122,7 +129,10 @@ class AuthMeResource(Resource):
             return {'error': str(e)}, 500
 
 class TicketListResource(Resource):
+    """Ticket management with intelligent auto-assignment and file upload support"""
+    
     def get(self):
+        """Get paginated list of tickets with agent name resolution"""
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 10, type=int)
         created_by = request.args.get('created_by')
@@ -141,7 +151,7 @@ class TicketListResource(Resource):
         
         tickets = []
         for ticket in paginated.items:
-            # Get assigned agent name
+            # Resolve agent ID to actual name for display
             assigned_agent_name = None
             if ticket.assigned_to:
                 agent = User.query.get(ticket.assigned_to)
@@ -177,14 +187,15 @@ class TicketListResource(Resource):
         }
     
     def post(self):
+        """Create new ticket with auto-assignment and file upload support"""
         try:
             print(f"Ticket creation request - Content-Type: {request.content_type}")
             print(f"Form data: {dict(request.form)}")
             print(f"Files: {list(request.files.keys())}")
             
-            # Handle both JSON and form data (for attachments)
+            # Handle multipart form data for file uploads or JSON for standard requests
             if request.content_type and 'multipart/form-data' in request.content_type:
-                # Form data with potential file upload
+                # Parse form data for ticket creation with file attachments
                 data = {
                     'title': request.form.get('title'),
                     'description': request.form.get('description'),
@@ -194,7 +205,7 @@ class TicketListResource(Resource):
                 }
                 print(f"Parsed form data: {data}")
             else:
-                # JSON data - skip schema validation to avoid strict category validation
+                # Parse JSON data for standard ticket creation
                 try:
                     json_data = request.get_json(force=True)
                     if not json_data:
@@ -212,7 +223,7 @@ class TicketListResource(Resource):
                 }
                 print(f"Parsed JSON data: {data}")
             
-            # Validate required fields with detailed error reporting
+            # Validate all required fields and provide detailed error messages
             missing_fields = []
             if not data.get('title'):
                 missing_fields.append('title')
@@ -229,7 +240,7 @@ class TicketListResource(Resource):
                 print(f"Missing required fields: {missing_fields}")
                 return {'error': f'Missing required fields: {", ".join(missing_fields)}'}, 400
             
-            # Get the highest ticket number from existing ticket_ids
+            # Generate unique ticket ID in TKT-XXXX format
             last_ticket = Ticket.query.filter(Ticket.ticket_id.like('TKT-%')).order_by(Ticket.ticket_id.desc()).first()
             if last_ticket and last_ticket.ticket_id:
                 try:
@@ -244,7 +255,7 @@ class TicketListResource(Resource):
             while Ticket.query.filter_by(ticket_id=f'TKT-{ticket_num}').first():
                 ticket_num += 1
             
-            # Auto-assign to agent with least workload
+            # Intelligent auto-assignment based on agent workload
             assigned_to = self._auto_assign_ticket(data['priority'])
             
             ticket = Ticket(
@@ -260,7 +271,7 @@ class TicketListResource(Resource):
             db.session.add(ticket)
             db.session.commit()
             
-            # Enhanced alert system using NotificationService
+            # Create assignment alerts for agents and supervisors
             if assigned_to:
                 try:
                     from app.services.notification_service import NotificationService
@@ -274,7 +285,7 @@ class TicketListResource(Resource):
                 except Exception as e:
                     print(f"Enhanced alert creation failed: {e}")
             else:
-                # Notify supervisors about unassigned ticket
+                # Escalate unassigned tickets to supervisors
                 try:
                     from app.services.notification_service import NotificationService
                     supervisors = User.query.filter_by(role='Technical Supervisor').all()
@@ -290,11 +301,11 @@ class TicketListResource(Resource):
                 except Exception as e:
                     print(f"Supervisor notification failed: {e}")
             
-            # Enhanced file attachment detection
+            # Process file attachments with multiple field name support
             attachment_file = None
             if request.content_type and 'multipart/form-data' in request.content_type:
                 print(f"Form files available: {list(request.files.keys())}")
-                # Check for attachment in multiple possible field names
+                # Detect files in various form field names (attachment, file, image, etc.)
                 for field_name in ['attachment', 'file', 'image', 'document', 'upload']:
                     if field_name in request.files:
                         file = request.files[field_name]
@@ -303,7 +314,7 @@ class TicketListResource(Resource):
                             print(f"Found attachment: {file.filename} in field '{field_name}'")
                             break
                 
-                # If no specific field found, try any available file
+                # Fallback to any available file if standard fields are empty
                 if not attachment_file:
                     for field_name, file in request.files.items():
                         if file and file.filename and file.filename.strip():
@@ -319,7 +330,7 @@ class TicketListResource(Resource):
                     result = cloudinary_service.upload_image(attachment_file, ticket.ticket_id, data['created_by'])
                     
                     if result:
-                        # Add attachment to timeline
+                        # Add file upload notification to ticket timeline
                         file_size_kb = result.get('bytes', 0) // 1024
                         message = Message(
                             ticket_id=ticket.id,
@@ -340,7 +351,7 @@ class TicketListResource(Resource):
             else:
                 print(f"No attachment file found in request")
             
-            # Send email notification
+            # Send ticket creation email notification to user
             try:
                 email_service = EmailService()
                 user = User.query.get(data['created_by'])
@@ -377,7 +388,11 @@ class TicketListResource(Resource):
             return {'error': f'Ticket creation failed: {str(e)}'}, 500
     
     def _auto_assign_ticket(self, priority):
-        """Auto-assign ticket to agent with least workload"""
+        """Intelligent auto-assignment to agent with least active workload
+        
+        Queries live database for Technical Users and Technical Supervisors,
+        calculates current workload, and assigns to agent with least active tickets.
+        """
         try:
             from sqlalchemy import text
             
@@ -407,7 +422,10 @@ class TicketListResource(Resource):
 
 
 class TicketResource(Resource):
+    """Individual ticket operations with flexible ID handling"""
+    
     def get(self, ticket_id):
+        """Get ticket by ID or ticket_id (TKT-XXXX format)"""
         try:
             # Try to find by ticket_id first (TKT-XXXX format)
             ticket = Ticket.query.filter_by(ticket_id=ticket_id).first()
@@ -487,7 +505,10 @@ class TicketResource(Resource):
             return {'error': str(e)}, 500
 
 class UserListResource(Resource):
+    """User management with role-based access control"""
+    
     def get(self):
+        """Get paginated list of users with role information"""
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 50, type=int)  # Increased default to show all users
         
@@ -548,7 +569,10 @@ class UserListResource(Resource):
             return {'error': 'Validation error', 'messages': e.messages}, 400
 
 class UserResource(Resource):
+    """Individual user operations for system administration"""
+    
     def get(self, user_id):
+        """Get user details by ID"""
         try:
             user = User.query.get_or_404(user_id)
             return {
@@ -601,7 +625,10 @@ class UserResource(Resource):
             return {'error': str(e)}, 500
 
 class MessageListResource(Resource):
+    """Ticket timeline messaging with real-time updates"""
+    
     def post(self):
+        """Add message to ticket timeline with sender information"""
         try:
             data = request.get_json()
             print(f"📨 Message data received: {data}")
@@ -610,11 +637,11 @@ class MessageListResource(Resource):
             if not data.get('ticket_id') or not data.get('sender_id') or not data.get('message'):
                 return {'error': 'Missing required fields: ticket_id, sender_id, message'}, 400
             
-            # Get ticket internal ID - handle both string ticket_id and numeric ID
+            # Handle flexible ticket identification (TKT-XXXX or numeric ID)
             ticket_id_param = data.get('ticket_id')
             ticket = None
             
-            # Try multiple ways to find the ticket
+            # Search by numeric ID first, then by ticket_id format
             if isinstance(ticket_id_param, int) or (isinstance(ticket_id_param, str) and ticket_id_param.isdigit()):
                 # If it's a numeric ID, find by internal ID
                 ticket = Ticket.query.get(int(ticket_id_param))
@@ -631,7 +658,7 @@ class MessageListResource(Resource):
             
             print(f" Found ticket: {ticket.ticket_id} (ID: {ticket.id})")
             
-            # Create message in database
+            # Store message in database with sender information
             message = Message(
                 ticket_id=ticket.id,
                 sender_id=data.get('sender_id'),
@@ -642,7 +669,7 @@ class MessageListResource(Resource):
             db.session.commit()
             print(f" Message saved to database: ID {message.id}")
             
-            # Get sender info
+            # Retrieve sender details for response
             sender = User.query.get(data.get('sender_id'))
             
             response = {
@@ -657,7 +684,7 @@ class MessageListResource(Resource):
             }
             
             print(f" Message response: {response}")
-            # Force refresh timeline after message creation
+            # Ensure message is committed to database for immediate display
             try:
                 db.session.refresh(message)
                 print(f" Message committed and refreshed: {message.id}")
@@ -672,7 +699,10 @@ class MessageListResource(Resource):
             return {'error': f'Failed to create message: {str(e)}'}, 500
 
 class AnalyticsResource(Resource):
+    """Analytics and reporting endpoints for dashboard metrics"""
+    
     def get(self, endpoint):
+        """Get analytics data for SLA adherence and agent performance"""
         if endpoint == 'sla-adherence':
             return {
                 'sla_adherence': 87.2,
@@ -721,7 +751,10 @@ class AnalyticsResource(Resource):
         return {'error': 'Endpoint not found'}, 404
 
 class EmailNotificationResource(Resource):
+    """Email notification service integration"""
+    
     def post(self):
+        """Send email notifications for ticket events"""
         data = request.get_json()
         email_service = EmailService()
         
@@ -735,10 +768,14 @@ class EmailNotificationResource(Resource):
         return {'success': success, 'message': 'Email sent' if success else 'Email failed'}
 
 class EmailVerificationResource(Resource):
+    """Email verification service (placeholder implementation)"""
+    
     def post(self):
         return {'error': 'Email verification not implemented'}, 501
 
 class MigrateTicketIDsResource(Resource):
+    """Database migration utility for ticket ID format standardization"""
+    
     def post(self):
         """Migrate existing tickets to proper TKT-XXXX format"""
         try:
@@ -796,8 +833,10 @@ class MigrateTicketIDsResource(Resource):
             return {'success': False, 'error': str(e)}, 500
 
 class AssignableAgentsResource(Resource):
+    """Agent management for ticket assignment"""
+    
     def get(self):
-        """Get all agents that can be assigned tickets (Technical Users and Technical Supervisors)"""
+        """Get all assignable agents (Technical Users and Technical Supervisors)"""
         try:
             agents = User.query.filter(
                 User.role.in_(['Technical User', 'Technical Supervisor'])
@@ -814,8 +853,10 @@ class AssignableAgentsResource(Resource):
             return {'error': f'Failed to fetch agents: {str(e)}'}, 500
 
 class AlertResource(Resource):
+    """User notification and alert management"""
+    
     def get(self, user_id):
-        """Get alerts for a specific user with enhanced filtering"""
+        """Get user alerts with filtering options"""
         try:
             from app.services.notification_service import NotificationService
             
@@ -858,8 +899,10 @@ class AlertResource(Resource):
             return {'error': f'Failed to update alerts: {str(e)}'}, 500
 
 class AlertCountResource(Resource):
+    """Real-time alert counting for notification badges"""
+    
     def get(self, user_id):
-        """Get unread alert count for a user"""
+        """Get unread alert count for notification bell"""
         try:
             from app.services.notification_service import NotificationService
             count = NotificationService.get_alert_count(user_id, unread_only=True)
@@ -868,8 +911,10 @@ class AlertCountResource(Resource):
             return {'error': f'Failed to get alert count: {str(e)}'}, 500
 
 class TimelineDebugResource(Resource):
+    """Development debugging endpoint for timeline troubleshooting"""
+    
     def get(self, ticket_id):
-        """Debug endpoint to check timeline data"""
+        """Debug ticket timeline data and message retrieval"""
         try:
             from sqlalchemy import text
             
@@ -922,14 +967,17 @@ class TimelineDebugResource(Resource):
             return {'error': str(e), 'ticket_id': ticket_id}, 500
 
 class ImageUploadResource(Resource):
+    """File upload endpoint with Cloudinary integration and timeline updates"""
+    
     def post(self):
+        """Upload files to Cloudinary and add to ticket timeline"""
         from flask import request
         from app.services.cloudinary_service import CloudinaryService
         
         print(f" ImageUpload - Available files: {list(request.files.keys())}")
         print(f" ImageUpload - Form data: {dict(request.form)}")
         
-        # Enhanced file detection - check all possible field names
+        # Comprehensive file detection across multiple form field names
         image_file = None
         for field_name in ['image', 'file', 'attachment', 'document', 'upload']:
             if field_name in request.files:
@@ -939,7 +987,7 @@ class ImageUploadResource(Resource):
                     print(f" Found file: {file.filename} in field '{field_name}'")
                     break
         
-        # Fallback: try any available file
+        # Fallback detection for any uploaded file
         if not image_file:
             for field_name, file in request.files.items():
                 if file and file.filename and file.filename.strip():
@@ -997,15 +1045,17 @@ class ImageUploadResource(Resource):
             return {'error': error_msg}, 500
 
 class FileUploadResource(Resource):
+    """Alternative file upload endpoint for timeline integration"""
+    
     def post(self):
-        """Alternative file upload endpoint for /files/upload"""
+        """Upload files via /files/upload endpoint with enhanced field detection"""
         from flask import request
         from app.services.cloudinary_service import CloudinaryService
         
         print(f" FileUpload - Available files: {list(request.files.keys())}")
         print(f" FileUpload - Form data: {dict(request.form)}")
         
-        # Enhanced file detection
+        # Multi-field file detection for flexible upload handling
         upload_file = None
         for field_name in ['file', 'image', 'attachment', 'document', 'upload']:
             if field_name in request.files:

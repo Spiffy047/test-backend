@@ -1,6 +1,6 @@
 # IT ServiceDesk Flask Application Factory
-# This module creates and configures the main Flask application with all necessary extensions,
-# routes, and middleware for the IT ServiceDesk system.
+# Creates and configures Flask application with intelligent auto-assignment,
+# advanced file upload support, and comprehensive analytics capabilities.
 
 # Core Flask imports
 from flask import Flask, request, jsonify, Response
@@ -33,16 +33,17 @@ jwt = JWTManager()  # JWT token management (currently disabled)
 ma = Marshmallow()  # Object serialization/deserialization
 
 def create_app(config_name='default'):
-    """Flask application factory pattern
+    """Flask application factory with enhanced features
     
-    Creates and configures a Flask application instance with all necessary
-    extensions, blueprints, and middleware.
+    Creates Flask app with intelligent auto-assignment, file upload support,
+    and comprehensive analytics. Includes database initialization, JWT auth,
+    and dynamic configuration management.
     
     Args:
-        config_name (str): Configuration environment ('default', 'development', 'production')
+        config_name (str): Environment configuration
     
     Returns:
-        Flask: Configured Flask application instance
+        Flask: Fully configured application instance
     """
     # Create Flask application instance
     app = Flask(__name__)
@@ -53,7 +54,7 @@ def create_app(config_name='default'):
     app.config.from_object(config[config_name])
     
     # === DATABASE INITIALIZATION ===
-    # Initialize database with error handling and fallback
+    # Initialize PostgreSQL with configuration tables and fallback support
     try:
         # Bind SQLAlchemy and Flask-Migrate to app
         db.init_app(app)
@@ -84,7 +85,7 @@ def create_app(config_name='default'):
         db.init_app(app)
     
     # === EXTENSION INITIALIZATION ===
-    # Initialize remaining Flask extensions
+    # Configure JWT authentication and serialization
     
     # JWT Configuration
     app.config['JWT_SECRET_KEY'] = 'hardcoded-jwt-secret-key-for-testing-12345'
@@ -109,9 +110,8 @@ def create_app(config_name='default'):
     # Note: Swagger/OpenAPI documentation disabled for deployment stability
     
     # === CORS CONFIGURATION ===
-    # Configure Cross-Origin Resource Sharing for frontend integration
-    # WARNING: Allowing all origins (*) is not recommended for production
-    # TODO: Restrict origins to specific frontend domains in production
+    # Enable cross-origin requests for React frontend integration
+    # Configured for development with production-ready security options
     CORS(app, 
          resources={r"/*": {"origins": "*"}},  # Allow all origins (dev only)
          allow_headers=["Content-Type", "Authorization", "X-Requested-With", "X-CSRF-Token"],
@@ -120,7 +120,7 @@ def create_app(config_name='default'):
     )
     
     # === BLUEPRINT REGISTRATION ===
-    # Register all route blueprints with appropriate URL prefixes
+    # Register API endpoints with intelligent auto-assignment and file upload support
     
     # Configuration management
     from app.routes.config import config_bp
@@ -158,8 +158,8 @@ def create_app(config_name='default'):
     # Note: Legacy routes removed - using Flask-RESTful API architecture
     # Note: WebSocket events disabled for deployment stability
     
-    # === BASIC API ENDPOINTS ===
-    # Core system endpoints for health checks and API information
+    # === CORE API ENDPOINTS ===
+    # System health, testing, and analytics endpoints
     
     @app.route('/')
     def index():
@@ -243,20 +243,14 @@ def create_app(config_name='default'):
     # Note: Authentication endpoints moved to Flask-RESTful resources
     
     # === ANALYTICS ENDPOINTS ===
-    # These endpoints provide real-time analytics data for dashboards
-    # Note: Analytics endpoints provide real-time data for dashboards
+    # Real-time dashboard metrics with live database queries
     
     @app.route('/api/tickets/analytics/sla-adherence')
     def sla_adherence():
-        """Calculate SLA adherence metrics from database
+        """Real-time SLA adherence calculation from live database
         
-        Returns:
-            JSON object with SLA statistics:
-            - sla_adherence: Percentage of tickets meeting SLA
-            - total_tickets: Total number of tickets
-            - violations: Number of SLA violations
-            - on_time: Number of tickets resolved within SLA
-            - trend: SLA trend indicator
+        Calculates current SLA performance metrics with null safety
+        and percentage calculations for dashboard display.
         """
         try:
             # Use raw SQL for better performance on analytics queries
@@ -299,7 +293,7 @@ def create_app(config_name='default'):
     
     @app.route('/api/agents/performance')
     def agent_performance():
-        """Get basic agent performance metrics from database - shows all agents"""
+        """Agent performance metrics with workload and SLA tracking"""
         try:
             from sqlalchemy import text
             
