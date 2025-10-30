@@ -64,7 +64,6 @@ class AuthMeResource(Resource):
             return {'error': str(e)}, 500
 
 class TicketListResource(Resource):
-    @jwt_required()
     def get(self):
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 10, type=int)
@@ -112,7 +111,6 @@ class TicketListResource(Resource):
             }
         }
     
-    @jwt_required()
     def post(self):
         try:
             # Handle both JSON and form data (for attachments)
@@ -234,7 +232,6 @@ class TicketListResource(Resource):
             return {'error': f'Ticket creation failed: {str(e)}'}, 500
 
 class TicketResource(Resource):
-    @jwt_required()
     def get(self, ticket_id):
         try:
             # Try to find by ticket_id first (TKT-XXXX format)
@@ -261,7 +258,6 @@ class TicketResource(Resource):
         except Exception as e:
             return {'error': f'Ticket not found: {str(e)}'}, 404
     
-    @jwt_required()
     def put(self, ticket_id):
         try:
             # Try to find by ticket_id first (TKT-XXXX format)
@@ -300,7 +296,6 @@ class TicketResource(Resource):
         except Exception as e:
             return {'error': f'Update failed: {str(e)}'}, 500
     
-    @jwt_required()
     def delete(self, ticket_id):
         try:
             # Try to find by ticket_id first (TKT-XXXX format)
