@@ -460,16 +460,60 @@ class TicketResource(Resource):
                 ticket = Ticket.query.get_or_404(ticket_id)
             
             data = request.get_json()
+            old_status = ticket.status
+            old_assigned_to = ticket.assigned_to
+            old_priority = ticket.priority
             
-            # Update ticket fields
-            if 'status' in data:
+            # Track changes for activity log
+            changes = []
+            
+            # Update ticket fields and track changes
+            if 'status' in data and data['status'] != old_status:
                 ticket.status = data['status']
-            if 'assigned_to' in data:
+                changes.append(f'Status changed from {old_status} to {data["status"]}')
+                
+                # Set resolved_at when ticket is resolved
+                if data['status'] in ['Resolved', 'Closed']:
+                    from datetime import datetime
+                    ticket.resolved_at = datetime.utcnow()
+                    
+            if 'assigned_to' in data and data['assigned_to'] != old_assigned_to:
                 ticket.assigned_to = data['assigned_to']
-            if 'priority' in data:
+                if data['assigned_to']:
+                    agent = User.query.get(data['assigned_to'])
+                    agent_name = agent.name if agent else f'Agent {data["assigned_to"]}'
+                    changes.append(f'Assigned to {agent_name}')
+                else:
+                    changes.append('Unassigned')
+                    
+            if 'priority' in data and data['priority'] != old_priority:
                 ticket.priority = data['priority']
+                changes.append(f'Priority changed from {old_priority} to {data["priority"]}')
             
             db.session.commit()
+            
+            # Create activity records for changes
+            if changes:
+                from app import activity_store
+                from datetime import datetime
+                
+                performed_by_name = data.get('performed_by_name', 'System')
+                
+                for change in changes:
+                    activity = {
+                        'id': f'update_{ticket.ticket_id}_{len(activity_store.get(ticket.ticket_id, []))}',
+                        'ticket_id': ticket.ticket_id,
+                        'description': change,
+                        'performed_by': data.get('performed_by', 'system'),
+                        'performed_by_name': performed_by_name,
+                        'created_at': datetime.utcnow().isoformat() + 'Z',
+                        'timestamp': datetime.utcnow().isoformat() + 'Z'
+                    }
+                    
+                    if ticket.ticket_id not in activity_store:
+                        activity_store[ticket.ticket_id] = []
+                    activity_store[ticket.ticket_id].append(activity)
+            
             return {
                 'id': ticket.id,
                 'ticket_id': ticket.ticket_id,

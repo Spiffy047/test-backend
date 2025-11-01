@@ -1,4 +1,4 @@
-# IT ServiceDesk Flask Application Factory
+
 # Creates and configures Flask application with intelligent auto-assignment,
 # advanced file upload support, and comprehensive analytics capabilities.
 
@@ -89,7 +89,7 @@ def create_app(config_name='default'):
     
     # JWT Configuration
     app.config['JWT_SECRET_KEY'] = 'hardcoded-jwt-secret-key-for-testing-12345'
-    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = False  # Tokens don't expire for demo
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = False  
     
     jwt.init_app(app)  # JWT authentication
     ma.init_app(app)   # Marshmallow serialization
@@ -107,7 +107,7 @@ def create_app(config_name='default'):
     def missing_token_callback(error):
         return {'error': 'Authorization token required'}, 401
     
-    # Note: Swagger/OpenAPI documentation disabled for deployment stability
+    
     
     # === CORS CONFIGURATION ===
     # Enable cross-origin requests for React frontend integration
@@ -147,16 +147,13 @@ def create_app(config_name='default'):
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
     print(" Admin routes registered")
     
-    # File upload/download endpoints (with fallback to built-in)
-    try:
-        from app.routes.files import files_bp
-        app.register_blueprint(files_bp, url_prefix='/api/files')
-        print(" Files routes registered successfully")
-    except ImportError:
-        print(" Files routes not found, using built-in file endpoints")
+    # Status workflow management
+    from app.routes.status import status_bp
+    app.register_blueprint(status_bp, url_prefix='/api/status')
+    print("[OK] Status workflow routes registered")
     
-    # Note: Legacy routes removed - using Flask-RESTful API architecture
-    # Note: WebSocket events disabled for deployment stability
+    # File routes removed - using frontend Cloudinary integration
+    
     
     # === CORE API ENDPOINTS ===
     # System health, testing, and analytics endpoints
@@ -599,126 +596,76 @@ def create_app(config_name='default'):
         try:
             from sqlalchemy import text
             
+            activities = []
+            
             # Get ticket creation activity
             ticket_result = db.session.execute(text("""
-                SELECT t.created_at, u.name as creator_name
+                SELECT t.created_at, u.name as creator_name, t.status, t.assigned_to, t.updated_at
                 FROM tickets t
                 LEFT JOIN users u ON t.created_by = u.id
                 WHERE t.ticket_id = :ticket_id OR t.id = :ticket_id
             """), {'ticket_id': ticket_id})
             
-            activities = []
             ticket_row = ticket_result.fetchone()
             if ticket_row:
+                # Ticket creation
                 activities.append({
                     'id': f'create_{ticket_id}',
                     'ticket_id': ticket_id,
                     'description': f'Ticket created by {ticket_row[1] or "Unknown User"}',
                     'performed_by': 'system',
                     'performed_by_name': 'System',
-                    'created_at': ticket_row[0].isoformat() + 'Z' if ticket_row[0] else None
+                    'created_at': ticket_row[0].isoformat() + 'Z' if ticket_row[0] else None,
+                    'timestamp': ticket_row[0].isoformat() + 'Z' if ticket_row[0] else None
                 })
+                
+                # Status change activity (if updated)
+                if ticket_row[4] and ticket_row[4] != ticket_row[0]:  # updated_at != created_at
+                    activities.append({
+                        'id': f'status_{ticket_id}',
+                        'ticket_id': ticket_id,
+                        'description': f'Status changed to {ticket_row[2]}',
+                        'performed_by': 'system',
+                        'performed_by_name': 'System',
+                        'created_at': ticket_row[4].isoformat() + 'Z' if ticket_row[4] else None,
+                        'timestamp': ticket_row[4].isoformat() + 'Z' if ticket_row[4] else None
+                    })
+                
+                # Assignment activity (if assigned)
+                if ticket_row[3]:  # assigned_to exists
+                    agent_result = db.session.execute(text("""
+                        SELECT name FROM users WHERE id = :agent_id
+                    """), {'agent_id': ticket_row[3]})
+                    agent_row = agent_result.fetchone()
+                    agent_name = agent_row[0] if agent_row else f'Agent {ticket_row[3]}'
+                    
+                    activities.append({
+                        'id': f'assign_{ticket_id}',
+                        'ticket_id': ticket_id,
+                        'description': f'Assigned to {agent_name}',
+                        'performed_by': 'system',
+                        'performed_by_name': 'System',
+                        'created_at': ticket_row[4].isoformat() + 'Z' if ticket_row[4] else None,
+                        'timestamp': ticket_row[4].isoformat() + 'Z' if ticket_row[4] else None
+                    })
+            
+            # Add any stored activities from memory
+            if ticket_id in activity_store:
+                activities.extend(activity_store[ticket_id])
+            
+            # Sort by timestamp
+            activities.sort(key=lambda x: x.get('timestamp', x.get('created_at', '')))
             
             return activities
         except Exception as e:
             print(f"Error fetching activities for {ticket_id}: {e}")
             return []
     
-    @app.route('/api/files/ticket/<ticket_id>')
-    def ticket_files(ticket_id):
-        files = []
-        
-        # Add any uploaded files for this ticket from memory store
-        if ticket_id in uploaded_files:
-            files.extend(uploaded_files[ticket_id])
-        
-        return files
+    # File upload removed - using frontend Cloudinary integration
     
-    # File storage for uploaded files
-    uploaded_files = {}
-    
-    @app.route('/api/files/upload', methods=['POST', 'OPTIONS'])
-    def upload_file():
-        if request.method == 'OPTIONS':
-            return '', 200
-            
-        try:
-            if 'file' not in request.files:
-                return {'error': 'No image provided'}, 400
-            
-            file = request.files['file']
-            ticket_id = request.form.get('ticket_id')
-            uploaded_by = request.form.get('uploaded_by')
-            
-            if not ticket_id or not uploaded_by:
-                return {'error': 'Missing ticket_id or uploaded_by'}, 400
-            
-            if file.filename == '':
-                return {'error': 'No file selected'}, 400
-            
-            # Validate file type
-            allowed_extensions = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 'xls', 'xlsx', 'zip', 'log'}
-            if '.' not in file.filename or file.filename.rsplit('.', 1)[1].lower() not in allowed_extensions:
-                return {'error': 'File type not allowed'}, 400
-            
-            # Read file content for size calculation
-            file_content = file.read()
-            file_size = len(file_content)
-            
-            # Check file size (10MB limit)
-            if file_size > 10 * 1024 * 1024:
-                return {'error': 'File too large (max 10MB)'}, 400
-            
-            # Reset file pointer
-            file.seek(0)
-            
-            # Store file info in memory (in production, save to cloud storage)
-            import uuid
-            file_id = str(uuid.uuid4())
-            file_info = {
-                'id': file_id,
-                'filename': file.filename,
-                'file_size_mb': round(file_size / (1024 * 1024), 2),
-                'ticket_id': ticket_id,
-                'uploaded_by': uploaded_by,
-                'download_url': f'/api/files/download/{file_id}',
-                'uploaded_at': datetime.utcnow().isoformat() + 'Z',
-                'content': file_content  # Store content in memory for demo
-            }
-            
-            if ticket_id not in uploaded_files:
-                uploaded_files[ticket_id] = []
-            uploaded_files[ticket_id].append(file_info)
-            
-            # Add file upload to timeline
-            if ticket_id not in messages_store:
-                messages_store[ticket_id] = []
-            
-            upload_message = {
-                'id': f'file_msg_{len(messages_store[ticket_id]) + 100}',
-                'ticket_id': ticket_id,
-                'sender_id': uploaded_by,
-                'sender_name': 'User',
-                'sender_role': 'Normal User',
-                'message': f'Uploaded file: {file.filename} ({file_info["file_size_mb"]} MB)',
-                'timestamp': datetime.utcnow().isoformat() + 'Z',
-                'type': 'file_upload'
-            }
-            messages_store[ticket_id].append(upload_message)
-            
-            return {
-                'id': file_info['id'],
-                'filename': file_info['filename'],
-                'file_size_mb': file_info['file_size_mb'],
-                'uploaded_at': file_info['uploaded_at']
-            }, 200
-            
-        except Exception as e:
-            print(f"File upload error: {e}")
-            return {'error': str(e)}, 500
-    
-    # Global message storage per ticket (in production, use database)
+    # Global message and activity storage per ticket (in production, use database)
     messages_store = {}
+    activity_store = {}
     
     # Messages endpoint moved to Flask-RESTful resources
     
@@ -944,21 +891,7 @@ def create_app(config_name='default'):
             print(f"Error fetching alerts for user {user_id}: {e}")
             return []
     
-    @app.route('/api/files/download/<file_id>')
-    def download_file(file_id):
-        # Find file in uploaded_files
-        for ticket_id, files in uploaded_files.items():
-            for file_info in files:
-                if file_info['id'] == file_id:
-                    # Return file content (in production, stream from cloud storage)
-                    return Response(
-                        file_info.get('content', b'File content not available'),
-                        mimetype='application/octet-stream',
-                        headers={
-                            'Content-Disposition': f'attachment; filename="{file_info["filename"]}"'
-                        }
-                    )
-        return {'error': 'File not found'}, 404
+    # File download removed - files served directly from Cloudinary
     
     @app.route('/api/sla/realtime-adherence')
     def realtime_sla_adherence():
