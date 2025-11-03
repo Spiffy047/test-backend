@@ -16,8 +16,6 @@ from app.api.resources import (
     AnalyticsResource,
     EmailNotificationResource,
     EmailVerificationResource,
-    ImageUploadResource,
-    FileUploadResource,
     MigrateTicketIDsResource,
     AssignableAgentsResource,
     AlertResource,
@@ -36,8 +34,7 @@ api.add_resource(MessageListResource, '/messages')
 api.add_resource(AnalyticsResource, '/analytics/<string:endpoint>')
 api.add_resource(EmailNotificationResource, '/notifications/email')
 api.add_resource(EmailVerificationResource, '/auth/verify-email')
-api.add_resource(ImageUploadResource, '/upload/image')
-api.add_resource(FileUploadResource, '/files/upload')
+# File upload endpoints removed - using frontend Cloudinary integration
 api.add_resource(MigrateTicketIDsResource, '/admin/migrate-ticket-ids')
 api.add_resource(AssignableAgentsResource, '/agents/assignable')
 api.add_resource(AlertResource, '/alerts/<int:user_id>')
