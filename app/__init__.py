@@ -453,19 +453,19 @@ def create_app(config_name='default'):
             from app.models import User, Ticket
             from sqlalchemy import func, case, extract
             
-            # Query detailed performance metrics
+            # Query detailed performance metrics - show all agents even without tickets
             result = db.session.query(
                 User.id,
                 User.name,
                 User.email,
                 User.role,
-                func.coalesce(func.count(case([(~Ticket.status.in_(['Resolved', 'Closed']), 1)])), 0).label('active_tickets'),
-                func.coalesce(func.count(case([(Ticket.status.in_(['Resolved', 'Closed']), 1)])), 0).label('closed_tickets'),
-                func.coalesce(func.count(case([(Ticket.sla_violated == True, 1)])), 0).label('sla_violations'),
+                func.coalesce(func.count(case([(Ticket.assigned_to.isnot(None) & (~Ticket.status.in_(['Resolved', 'Closed'])), 1)])), 0).label('active_tickets'),
+                func.coalesce(func.count(case([(Ticket.assigned_to.isnot(None) & (Ticket.status.in_(['Resolved', 'Closed'])), 1)])), 0).label('closed_tickets'),
+                func.coalesce(func.count(case([(Ticket.assigned_to.isnot(None) & (Ticket.sla_violated == True), 1)])), 0).label('sla_violations'),
                 func.coalesce(
                     func.avg(
                         case([
-                            (Ticket.status.in_(['Resolved', 'Closed']),
+                            ((Ticket.assigned_to.isnot(None)) & (Ticket.status.in_(['Resolved', 'Closed'])),
                              extract('epoch', Ticket.updated_at - Ticket.created_at) / 3600)
                         ])
                     ), 0
