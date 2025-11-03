@@ -171,6 +171,45 @@ def create_app(config_name='default'):
         except Exception as e:
             return {'error': str(e), 'users': []}
     
+    @app.route('/api/test/tickets')
+    def test_tickets():
+        """Test ticket data and SLA fields"""
+        try:
+            from app.models import Ticket
+            from sqlalchemy import func
+            
+            # Get basic counts
+            total_tickets = Ticket.query.count()
+            sla_true = Ticket.query.filter_by(sla_violated=True).count()
+            sla_false = Ticket.query.filter_by(sla_violated=False).count()
+            sla_null = Ticket.query.filter(Ticket.sla_violated.is_(None)).count()
+            
+            # Get sample tickets
+            sample_tickets = Ticket.query.limit(5).all()
+            samples = []
+            for ticket in sample_tickets:
+                samples.append({
+                    'id': ticket.id,
+                    'ticket_id': ticket.ticket_id,
+                    'title': ticket.title,
+                    'status': ticket.status,
+                    'priority': ticket.priority,
+                    'sla_violated': ticket.sla_violated,
+                    'created_at': ticket.created_at.isoformat() if ticket.created_at else None
+                })
+            
+            return {
+                'total_tickets': total_tickets,
+                'sla_counts': {
+                    'violated': sla_true,
+                    'met': sla_false,
+                    'null': sla_null
+                },
+                'sample_tickets': samples
+            }
+        except Exception as e:
+            return {'error': str(e)}
+    
     @app.route('/api/test/create-user', methods=['POST'])
     def create_test_user():
         """Create test user for development and testing"""
@@ -214,17 +253,35 @@ def create_app(config_name='default'):
             from app.models import Ticket
             from sqlalchemy import func, case
             
-            # Query SLA statistics using ORM aggregation
+            # Debug: Check total tickets first
+            total_count = Ticket.query.count()
+            print(f"Debug: Total tickets in DB: {total_count}")
+            
+            if total_count == 0:
+                print("Debug: No tickets found")
+                return {
+                    'sla_adherence': 0,
+                    'total_tickets': 0,
+                    'violations': 0,
+                    'on_time': 0,
+                    'trend': 'stable'
+                }
+            
+            # Query SLA statistics with explicit null handling
             result = db.session.query(
                 func.count(Ticket.id).label('total_tickets'),
                 func.count(case([(Ticket.sla_violated == False, 1)])).label('on_time'),
-                func.count(case([(Ticket.sla_violated == True, 1)])).label('violations')
+                func.count(case([(Ticket.sla_violated == True, 1)])).label('violations'),
+                func.count(case([(Ticket.sla_violated.is_(None), 1)])).label('null_sla')
             ).first()
             
             # Extract values with null safety
             total_tickets = result.total_tickets or 0
             on_time = result.on_time or 0
             violations = result.violations or 0
+            null_sla = result.null_sla or 0
+            
+            print(f"Debug SLA query: Total={total_tickets}, On-time={on_time}, Violations={violations}, Null={null_sla}")
             
             # Calculate adherence percentage with division by zero protection
             sla_adherence = (on_time / total_tickets * 100) if total_tickets > 0 else 0
@@ -234,16 +291,23 @@ def create_app(config_name='default'):
                 'total_tickets': total_tickets,
                 'violations': violations,
                 'on_time': on_time,
-                'trend': 'stable'
+                'trend': 'stable',
+                'debug': {
+                    'null_sla_count': null_sla,
+                    'query_total': total_count
+                }
             }
         except Exception as e:
             print(f"Error fetching SLA adherence: {e}")
+            import traceback
+            traceback.print_exc()
             return {
                 'sla_adherence': 0,
                 'total_tickets': 0,
                 'violations': 0,
                 'on_time': 0,
-                'trend': 'stable'
+                'trend': 'stable',
+                'error': str(e)
             }
     
     @app.route('/api/agents/performance')
@@ -911,7 +975,19 @@ def create_app(config_name='default'):
             from app.models import Ticket
             from sqlalchemy import func, case, extract
             
-            # Calculate overall SLA statistics
+            # Debug: Check total tickets
+            total_count = Ticket.query.count()
+            print(f"Debug realtime SLA: Total tickets: {total_count}")
+            
+            if total_count == 0:
+                return {
+                    'overall': {'total_tickets': 0, 'closed_met_sla': 0, 'closed_violated_sla': 0, 'closed_adherence_percentage': 0, 'open_violated': 0, 'open_at_risk': 0},
+                    'priority_breakdown': {},
+                    'average_resolution_times': {},
+                    'sla_targets': {'Critical': 4, 'High': 8, 'Medium': 24, 'Low': 72}
+                }
+            
+            # Calculate overall SLA statistics with null handling
             overall_result = db.session.query(
                 func.count(Ticket.id).label('total_tickets'),
                 func.count(case([
@@ -922,7 +998,8 @@ def create_app(config_name='default'):
                 ])).label('closed_violated_sla'),
                 func.count(case([
                     ((~Ticket.status.in_(['Resolved', 'Closed'])) & (Ticket.sla_violated == True), 1)
-                ])).label('open_violated')
+                ])).label('open_violated'),
+                func.count(case([(Ticket.sla_violated.is_(None), 1)])).label('null_sla')
             ).first()
             
             # Extract overall metrics
@@ -930,6 +1007,9 @@ def create_app(config_name='default'):
             closed_met = overall_result.closed_met_sla or 0
             closed_violated = overall_result.closed_violated_sla or 0
             open_violated = overall_result.open_violated or 0
+            null_sla = overall_result.null_sla or 0
+            
+            print(f"Debug SLA breakdown: Total={total}, Met={closed_met}, Violated={closed_violated}, Open_violated={open_violated}, Null={null_sla}")
             
             # Calculate overall adherence percentage
             closed_total = closed_met + closed_violated
@@ -997,12 +1077,15 @@ def create_app(config_name='default'):
             }
         except Exception as e:
             print(f"Error fetching SLA adherence: {e}")
+            import traceback
+            traceback.print_exc()
             # Return empty structure on error
             return {
                 'overall': {'total_tickets': 0, 'closed_met_sla': 0, 'closed_violated_sla': 0, 'closed_adherence_percentage': 0, 'open_violated': 0, 'open_at_risk': 0},
                 'priority_breakdown': {},
                 'average_resolution_times': {},
-                'sla_targets': {'Critical': 4, 'High': 8, 'Medium': 24, 'Low': 72}
+                'sla_targets': {'Critical': 4, 'High': 8, 'Medium': 24, 'Low': 72},
+                'error': str(e)
             }
     
     # Return configured Flask application
