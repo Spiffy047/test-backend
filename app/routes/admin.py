@@ -48,10 +48,15 @@ def database_info():
                 if model_class:
                     row_count = model_class.query.count()
                 else:
-                    # Fallback for tables without models
-                    from sqlalchemy import text
-                    count_result = db.session.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
-                    row_count = count_result.scalar()
+                    # Fallback for tables without models - use ORM introspection
+                    try:
+                        # Try to get count using SQLAlchemy core (not raw SQL)
+                        from sqlalchemy import MetaData, Table
+                        metadata = MetaData()
+                        table = Table(table_name, metadata, autoload_with=db.engine)
+                        row_count = db.session.query(table).count()
+                    except:
+                        row_count = 0
             except:
                 row_count = 0
             
