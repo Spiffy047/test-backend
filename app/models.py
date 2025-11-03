@@ -47,7 +47,7 @@ class Ticket(db.Model):
     ticket_id = db.Column(db.String(20), unique=True, nullable=False)
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=False)
-    status = db.Column(db.String(20), nullable=False, default='New')
+    status = db.Column(db.String(20), nullable=False, default='Open')
     priority = db.Column(db.String(20), nullable=False)
     category = db.Column(db.String(50), nullable=False)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)

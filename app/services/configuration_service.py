@@ -93,14 +93,13 @@ class ConfigurationService:
                 role = UserRole(**role_data)
                 db.session.add(role)
         
-        # Create default ticket statuses with workflow order
+        # Create default ticket statuses with workflow order (New and Open combined as Open)
         default_statuses = [
-            {'name': 'New', 'sort_order': 1},
-            {'name': 'Open', 'sort_order': 2},
-            {'name': 'In Progress', 'sort_order': 3},
-            {'name': 'Pending', 'sort_order': 4},
-            {'name': 'Resolved', 'is_closed_status': True, 'sort_order': 5},
-            {'name': 'Closed', 'is_closed_status': True, 'sort_order': 6}
+            {'name': 'Open', 'sort_order': 1},
+            {'name': 'In Progress', 'sort_order': 2},
+            {'name': 'Pending', 'sort_order': 3},
+            {'name': 'Resolved', 'is_closed_status': True, 'sort_order': 4},
+            {'name': 'Closed', 'is_closed_status': True, 'sort_order': 5}
         ]
         
         # Add statuses if they don't exist

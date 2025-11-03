@@ -336,8 +336,8 @@ def create_app(config_name='default'):
                 func.count(Ticket.id).label('count')
             ).group_by(Ticket.status).all()
             
-            # Initialize standard status categories
-            counts = {'new': 0, 'open': 0, 'pending': 0, 'closed': 0}
+            # Initialize standard status categories (New and Open combined)
+            counts = {'open': 0, 'pending': 0, 'closed': 0}
             
             # Map database statuses to standard categories
             for row in result:
@@ -346,8 +346,10 @@ def create_app(config_name='default'):
                     counts['closed'] += row.count
                 elif status == 'in progress':
                     counts['open'] += row.count
-                elif status in ['new', 'open', 'pending']:
-                    counts[status] = row.count
+                elif status in ['new', 'open']:
+                    counts['open'] += row.count
+                elif status == 'pending':
+                    counts['pending'] = row.count
                 else:
                     # Handle custom statuses by keyword matching
                     if 'close' in status or 'resolve' in status:
@@ -355,12 +357,12 @@ def create_app(config_name='default'):
                     elif 'progress' in status or 'active' in status:
                         counts['open'] += row.count
                     else:
-                        counts['new'] += row.count
+                        counts['open'] += row.count
             
             return counts
         except Exception as e:
             print(f"Error fetching ticket counts: {e}")
-            return {'new': 0, 'open': 0, 'pending': 0, 'closed': 0}
+            return {'open': 0, 'pending': 0, 'closed': 0}
     
     @app.route('/api/analytics/unassigned-tickets')
     def unassigned_tickets():
