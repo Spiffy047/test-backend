@@ -6,7 +6,6 @@ Handles alert creation, management, and delivery
 from datetime import datetime
 from app import db
 from app.models import Alert, User, Ticket
-from sqlalchemy import text
 
 class NotificationService:
     """Enhanced notification service for comprehensive alert management"""
@@ -96,31 +95,41 @@ class NotificationService:
     def get_user_alerts(user_id, limit=20, unread_only=False):
         """Get alerts for a specific user with enhanced filtering"""
         try:
-            query = db.session.execute(text("""
-                SELECT a.id, a.title, a.message, a.alert_type, a.is_read, a.created_at,
-                       COALESCE(t.ticket_id, CAST(a.ticket_id AS VARCHAR)) as ticket_id,
-                       t.status as ticket_status, t.priority as ticket_priority
-                FROM alerts a
-                LEFT JOIN tickets t ON a.ticket_id = t.id
-                WHERE a.user_id = :user_id
-                """ + (" AND a.is_read = false" if unread_only else "") + """
-                ORDER BY a.created_at DESC
-                LIMIT :limit
-            """), {'user_id': user_id, 'limit': limit})
+            # Use ORM query with joins
+            query = db.session.query(
+                Alert.id,
+                Alert.title,
+                Alert.message,
+                Alert.alert_type,
+                Alert.is_read,
+                Alert.created_at,
+                Ticket.ticket_id,
+                Ticket.status,
+                Ticket.priority
+            ).outerjoin(
+                Ticket, Alert.ticket_id == Ticket.id
+            ).filter(
+                Alert.user_id == user_id
+            )
+            
+            if unread_only:
+                query = query.filter(Alert.is_read == False)
+            
+            query = query.order_by(Alert.created_at.desc()).limit(limit)
             
             alerts = []
             for row in query:
                 alerts.append({
-                    'id': row[0],
-                    'title': row[1],
-                    'message': row[2],
-                    'alert_type': row[3],
-                    'is_read': row[4],
-                    'created_at': row[5].isoformat() + 'Z' if row[5] else None,
-                    'ticket_id': row[6],
-                    'ticket_status': row[7],
-                    'ticket_priority': row[8],
-                    'clickable': bool(row[6])  # Can click if has ticket_id
+                    'id': row.id,
+                    'title': row.title,
+                    'message': row.message,
+                    'alert_type': row.alert_type,
+                    'is_read': row.is_read,
+                    'created_at': row.created_at.isoformat() + 'Z' if row.created_at else None,
+                    'ticket_id': row.ticket_id,
+                    'ticket_status': row.status,
+                    'ticket_priority': row.priority,
+                    'clickable': bool(row.ticket_id)  # Can click if has ticket_id
                 })
             
             return alerts
@@ -154,10 +163,11 @@ class NotificationService:
     def mark_all_alerts_read(user_id):
         """Mark all alerts as read for a user"""
         try:
-            db.session.execute(text("""
-                UPDATE alerts SET is_read = true 
-                WHERE user_id = :user_id AND is_read = false
-            """), {'user_id': user_id})
+            # Use ORM update
+            Alert.query.filter_by(
+                user_id=user_id, 
+                is_read=False
+            ).update({'is_read': True})
             
             db.session.commit()
             return True
@@ -171,13 +181,12 @@ class NotificationService:
     def get_alert_count(user_id, unread_only=True):
         """Get count of alerts for a user"""
         try:
-            query = text("""
-                SELECT COUNT(*) FROM alerts 
-                WHERE user_id = :user_id
-            """ + (" AND is_read = false" if unread_only else ""))
+            # Use ORM count
+            query = Alert.query.filter_by(user_id=user_id)
+            if unread_only:
+                query = query.filter_by(is_read=False)
             
-            result = db.session.execute(query, {'user_id': user_id})
-            return result.scalar() or 0
+            return query.count()
             
         except Exception as e:
             print(f"[ERROR] Error getting alert count for user {user_id}: {e}")
@@ -190,13 +199,17 @@ class NotificationService:
             from datetime import timedelta
             cutoff_date = datetime.utcnow() - timedelta(days=days_old)
             
-            result = db.session.execute(text("""
-                DELETE FROM alerts 
-                WHERE is_read = true AND created_at < :cutoff_date
-            """), {'cutoff_date': cutoff_date})
+            # Use ORM delete
+            old_alerts = Alert.query.filter(
+                Alert.is_read == True,
+                Alert.created_at < cutoff_date
+            ).all()
+            
+            deleted_count = len(old_alerts)
+            for alert in old_alerts:
+                db.session.delete(alert)
             
             db.session.commit()
-            deleted_count = result.rowcount
             print(f"🧹 Cleaned up {deleted_count} old alerts")
             return deleted_count
             

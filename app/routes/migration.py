@@ -8,21 +8,21 @@ migration_bp = Blueprint('migration', __name__)
 def add_image_url_column():
     """Add image_url column to messages table for file upload support"""
     try:
-        # Check if column already exists
-        result = db.session.execute(text("""
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'messages' AND column_name = 'image_url'
-        """))
+        # Check if column already exists using introspection
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        columns = inspector.get_columns('messages')
+        column_names = [col['name'] for col in columns]
         
-        if result.fetchone():
+        if 'image_url' in column_names:
             return jsonify({
                 "success": True,
                 "message": "image_url column already exists in messages table",
                 "action": "none"
             })
         
-        # Add the column
+        # Add the column using raw SQL (DDL operations require raw SQL)
+        from sqlalchemy import text
         db.session.execute(text("""
             ALTER TABLE messages 
             ADD COLUMN image_url VARCHAR(500)
