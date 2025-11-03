@@ -147,6 +147,11 @@ def create_app(config_name='default'):
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
     print(" Admin routes registered")
     
+    # Migration endpoints
+    from app.routes.migration import migration_bp
+    app.register_blueprint(migration_bp, url_prefix='/api/migration')
+    print("[OK] Migration routes registered")
+    
     # Status workflow management
     from app.routes.status import status_bp
     app.register_blueprint(status_bp, url_prefix='/api/status')
