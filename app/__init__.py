@@ -555,7 +555,7 @@ def create_app(config_name='default'):
             
             # Get messages from database
             result = db.session.execute(text("""
-                SELECT m.id, m.message, m.created_at, m.sender_id, u.name, u.role
+                SELECT m.id, m.message, m.created_at, m.sender_id, u.name, u.role, m.image_url
                 FROM messages m
                 LEFT JOIN users u ON m.sender_id = u.id
                 WHERE m.ticket_id = :ticket_id
@@ -571,6 +571,7 @@ def create_app(config_name='default'):
                     'sender_name': row[4] or 'Unknown User',
                     'sender_role': row[5] or 'Normal User',
                     'message': row[1],
+                    'image_url': row[6],  # Include Cloudinary URL
                     'timestamp': row[2].isoformat() + 'Z' if row[2] else None,
                     'type': 'message'
                 })

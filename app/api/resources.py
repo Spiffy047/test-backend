@@ -641,7 +641,8 @@ class MessageListResource(Resource):
             message = Message(
                 ticket_id=ticket.id,
                 sender_id=data.get('sender_id'),
-                message=data.get('message')
+                message=data.get('message'),
+                image_url=data.get('image_url')  # Store Cloudinary URL if provided
             )
             
             db.session.add(message)

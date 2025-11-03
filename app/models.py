@@ -155,6 +155,7 @@ class Message(db.Model):
     
     # Message content and metadata
     message = db.Column(db.Text, nullable=False)  # Message text content
+    image_url = db.Column(db.String(500), nullable=True)  # Cloudinary file URL
     created_at = db.Column(db.DateTime, default=datetime.utcnow)  # When message was sent
     
     def __repr__(self):
