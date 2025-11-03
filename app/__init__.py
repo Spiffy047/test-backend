@@ -242,29 +242,21 @@ def create_app(config_name='default'):
     
     @app.route('/api/tickets/analytics/sla-adherence')
     def sla_adherence():
-        """Real-time SLA adherence calculation from live database
-        
-        Calculates current SLA performance metrics with null safety
-        and percentage calculations for dashboard display.
-        """
+        """Real-time SLA adherence calculation using ORM"""
         try:
-            # Use raw SQL for better performance on analytics queries
-            from sqlalchemy import text
+            from app.models import Ticket
+            from sqlalchemy import func, case
             
-            # Query ticket SLA statistics from database
-            result = db.session.execute(text("""
-                SELECT 
-                    COUNT(*) as total_tickets,
-                    COUNT(CASE WHEN sla_violated = false THEN 1 END) as on_time,
-                    COUNT(CASE WHEN sla_violated = true THEN 1 END) as violations
-                FROM tickets
-            """))
+            # Query ticket SLA statistics using ORM
+            result = db.session.query(
+                func.count(Ticket.id).label('total_tickets'),
+                func.count(case([(Ticket.sla_violated == False, 1)])).label('on_time'),
+                func.count(case([(Ticket.sla_violated == True, 1)])).label('violations')
+            ).first()
             
-            # Extract results with null safety
-            row = result.fetchone()
-            total_tickets = row[0] if row else 0
-            on_time = row[1] if row else 0
-            violations = row[2] if row else 0
+            total_tickets = result.total_tickets or 0
+            on_time = result.on_time or 0
+            violations = result.violations or 0
             
             # Calculate SLA adherence percentage (avoid division by zero)
             sla_adherence = (on_time / total_tickets * 100) if total_tickets > 0 else 0
@@ -288,41 +280,51 @@ def create_app(config_name='default'):
     
     @app.route('/api/agents/performance')
     def agent_performance():
-        """Agent performance metrics with workload and SLA tracking"""
+        """Agent performance metrics using ORM"""
         try:
-            from sqlalchemy import text
+            from app.models import User, Ticket
+            from sqlalchemy import func, case, extract
             
-            result = db.session.execute(text("""
-                SELECT 
-                    u.id, u.name, u.email, u.role,
-                    COALESCE(COUNT(CASE WHEN t.status IN ('Resolved', 'Closed') THEN 1 END), 0) as tickets_closed,
-                    COALESCE(AVG(CASE WHEN t.status IN ('Resolved', 'Closed') AND t.resolved_at IS NOT NULL THEN 
-                        EXTRACT(EPOCH FROM (t.resolved_at - t.created_at))/3600 END), 0) as avg_handle_time,
-                    COALESCE(COUNT(CASE WHEN t.sla_violated = true THEN 1 END), 0) as sla_violations,
-                    COALESCE(COUNT(CASE WHEN t.assigned_to = u.id THEN 1 END), 0) as total_assigned
-                FROM users u
-                LEFT JOIN tickets t ON u.id = t.assigned_to
-                WHERE u.role IN ('Technical User', 'Technical Supervisor')
-                GROUP BY u.id, u.name, u.email, u.role
-                ORDER BY u.name
-            """))
+            result = db.session.query(
+                User.id,
+                User.name,
+                User.email,
+                User.role,
+                func.coalesce(func.count(case([(Ticket.status.in_(['Resolved', 'Closed']), 1)])), 0).label('tickets_closed'),
+                func.coalesce(
+                    func.avg(
+                        case([
+                            ((Ticket.status.in_(['Resolved', 'Closed'])) & (Ticket.resolved_at.isnot(None)),
+                             extract('epoch', Ticket.resolved_at - Ticket.created_at) / 3600)
+                        ])
+                    ), 0
+                ).label('avg_handle_time'),
+                func.coalesce(func.count(case([(Ticket.sla_violated == True, 1)])), 0).label('sla_violations'),
+                func.coalesce(func.count(case([(Ticket.assigned_to == User.id, 1)])), 0).label('total_assigned')
+            ).outerjoin(
+                Ticket, User.id == Ticket.assigned_to
+            ).filter(
+                User.role.in_(['Technical User', 'Technical Supervisor'])
+            ).group_by(
+                User.id, User.name, User.email, User.role
+            ).order_by(User.name).all()
             
             agents = []
             for row in result:
-                closed = row[4] or 0
-                violations = row[6] or 0
-                total_assigned = row[7] or 0
+                closed = row.tickets_closed or 0
+                violations = row.sla_violations or 0
+                total_assigned = row.total_assigned or 0
                 score = max(0, (closed * 10) - (violations * 5))
                 rating = 'Excellent' if score >= 50 else 'Good' if score >= 30 else 'Average' if score >= 15 else 'Needs Improvement'
                 
                 agents.append({
-                    'id': row[0],
-                    'name': row[1],
-                    'email': row[2],
-                    'role': row[3],
+                    'id': row.id,
+                    'name': row.name,
+                    'email': row.email,
+                    'role': row.role,
                     'tickets_closed': closed,
                     'total_assigned': total_assigned,
-                    'avg_handle_time': round(row[5] or 0, 1),
+                    'avg_handle_time': round(row.avg_handle_time or 0, 1),
                     'sla_violations': violations,
                     'rating': rating
                 })
@@ -334,27 +336,21 @@ def create_app(config_name='default'):
     
     @app.route('/api/agents')
     def agents_list():
-        """Get list of all agents from database"""
+        """Get list of all agents using ORM"""
         try:
-            from sqlalchemy import text
+            from app.models import User
             
-            result = db.session.execute(text("""
-                SELECT id, name, email, role
-                FROM users 
-                WHERE role IN ('Technical User', 'Technical Supervisor')
-                ORDER BY name
-            """))
+            agents = User.query.filter(
+                User.role.in_(['Technical User', 'Technical Supervisor'])
+            ).order_by(User.name).all()
             
-            agents = []
-            for row in result:
-                agents.append({
-                    'id': row[0],
-                    'name': row[1],
-                    'email': row[2],
-                    'role': row[3]
-                })
+            return [{
+                'id': agent.id,
+                'name': agent.name,
+                'email': agent.email,
+                'role': agent.role
+            } for agent in agents]
             
-            return agents
         except Exception as e:
             print(f"Error fetching agents: {e}")
             return []
@@ -362,31 +358,32 @@ def create_app(config_name='default'):
     @app.route('/api/analytics/ticket-status-counts')
     def ticket_status_counts():
         try:
-            from sqlalchemy import text
-            result = db.session.execute(text("""
-                SELECT status, COUNT(*) as count 
-                FROM tickets 
-                GROUP BY status
-            """))
+            from app.models import Ticket
+            from sqlalchemy import func
+            
+            result = db.session.query(
+                Ticket.status,
+                func.count(Ticket.id).label('count')
+            ).group_by(Ticket.status).all()
             
             counts = {'new': 0, 'open': 0, 'pending': 0, 'closed': 0}
             for row in result:
-                status = row[0].lower()
+                status = row.status.lower()
                 # Map database status values to expected keys
                 if status == 'resolved':
-                    counts['closed'] += row[1]
+                    counts['closed'] += row.count
                 elif status == 'in progress':
-                    counts['open'] += row[1]
+                    counts['open'] += row.count
                 elif status in ['new', 'open', 'pending']:
-                    counts[status] = row[1]
+                    counts[status] = row.count
                 else:
                     # Handle any other status by mapping to appropriate category
                     if 'close' in status or 'resolve' in status:
-                        counts['closed'] += row[1]
+                        counts['closed'] += row.count
                     elif 'progress' in status or 'active' in status:
-                        counts['open'] += row[1]
+                        counts['open'] += row.count
                     else:
-                        counts['new'] += row[1]
+                        counts['new'] += row.count
             
             return counts
         except Exception as e:
@@ -396,35 +393,31 @@ def create_app(config_name='default'):
     @app.route('/api/analytics/unassigned-tickets')
     def unassigned_tickets():
         try:
-            from sqlalchemy import text
+            from app.models import Ticket
+            from datetime import datetime
             
-            result = db.session.execute(text("""
-                SELECT 
-                    id,
-                    ticket_id,
-                    title,
-                    priority,
-                    category,
-                    status,
-                    created_at,
-                    EXTRACT(EPOCH FROM (NOW() - created_at))/3600 as hours_open
-                FROM tickets 
-                WHERE assigned_to IS NULL AND status NOT IN ('Closed', 'Resolved')
-                ORDER BY created_at DESC
-                LIMIT 20
-            """))
+            tickets_query = Ticket.query.filter(
+                Ticket.assigned_to.is_(None),
+                ~Ticket.status.in_(['Closed', 'Resolved'])
+            ).order_by(Ticket.created_at.desc()).limit(20).all()
             
             tickets = []
-            for row in result:
+            for ticket in tickets_query:
+                # Calculate hours open
+                if ticket.created_at:
+                    hours_open = (datetime.utcnow() - ticket.created_at).total_seconds() / 3600
+                else:
+                    hours_open = 0
+                
                 tickets.append({
-                    'id': row[1] or f'TKT-{row[0]}',  # Use ticket_id or generate from id
-                    'ticket_id': row[1] or f'TKT-{row[0]}',
-                    'title': row[2],
-                    'priority': row[3],
-                    'category': row[4],
-                    'status': row[5],
-                    'created_at': row[6].isoformat() if row[6] else None,
-                    'hours_open': round(float(row[7]), 1) if row[7] else 0
+                    'id': ticket.ticket_id or f'TKT-{ticket.id}',
+                    'ticket_id': ticket.ticket_id or f'TKT-{ticket.id}',
+                    'title': ticket.title,
+                    'priority': ticket.priority,
+                    'category': ticket.category,
+                    'status': ticket.status,
+                    'created_at': ticket.created_at.isoformat() if ticket.created_at else None,
+                    'hours_open': round(hours_open, 1)
                 })
             
             return {'tickets': tickets}
@@ -435,37 +428,38 @@ def create_app(config_name='default'):
     @app.route('/api/analytics/agent-workload')
     def agent_workload():
         try:
-            from sqlalchemy import text
+            from app.models import User, Ticket
+            from sqlalchemy import func, case
             
-            result = db.session.execute(text("""
-                SELECT 
-                    u.id,
-                    u.name,
-                    u.email,
-                    u.role,
-                    COALESCE(COUNT(t.id), 0) as total_tickets,
-                    COALESCE(COUNT(CASE WHEN t.status NOT IN ('Resolved', 'Closed') THEN 1 END), 0) as active_tickets,
-                    COALESCE(COUNT(CASE WHEN t.status = 'Pending' THEN 1 END), 0) as pending_tickets,
-                    COALESCE(COUNT(CASE WHEN t.status IN ('Resolved', 'Closed') THEN 1 END), 0) as closed_tickets
-                FROM users u
-                LEFT JOIN tickets t ON u.id = t.assigned_to
-                WHERE u.role IN ('Technical User', 'Technical Supervisor')
-                GROUP BY u.id, u.name, u.email, u.role
-                ORDER BY u.name
-            """))
+            result = db.session.query(
+                User.id,
+                User.name,
+                User.email,
+                User.role,
+                func.coalesce(func.count(Ticket.id), 0).label('total_tickets'),
+                func.coalesce(func.count(case([(~Ticket.status.in_(['Resolved', 'Closed']), 1)])), 0).label('active_tickets'),
+                func.coalesce(func.count(case([(Ticket.status == 'Pending', 1)])), 0).label('pending_tickets'),
+                func.coalesce(func.count(case([(Ticket.status.in_(['Resolved', 'Closed']), 1)])), 0).label('closed_tickets')
+            ).outerjoin(
+                Ticket, User.id == Ticket.assigned_to
+            ).filter(
+                User.role.in_(['Technical User', 'Technical Supervisor'])
+            ).group_by(
+                User.id, User.name, User.email, User.role
+            ).order_by(User.name).all()
             
             agents = []
             for row in result:
                 agents.append({
-                    'agent_id': row[0],
-                    'id': row[0],
-                    'name': row[1],
-                    'email': row[2],
-                    'role': row[3],
-                    'ticket_count': row[4],
-                    'active_tickets': row[5],
-                    'pending_tickets': row[6],
-                    'closed_tickets': row[7]
+                    'agent_id': row.id,
+                    'id': row.id,
+                    'name': row.name,
+                    'email': row.email,
+                    'role': row.role,
+                    'ticket_count': row.total_tickets,
+                    'active_tickets': row.active_tickets,
+                    'pending_tickets': row.pending_tickets,
+                    'closed_tickets': row.closed_tickets
                 })
             
             return agents
@@ -530,13 +524,13 @@ def create_app(config_name='default'):
             return '', 200
         
         try:
-            from sqlalchemy import text
+            from app.models import Alert
             
-            result = db.session.execute(text("""
-                SELECT COUNT(*) FROM alerts WHERE user_id = :user_id AND is_read = false
-            """), {'user_id': user_id})
+            count = Alert.query.filter_by(
+                user_id=user_id,
+                is_read=False
+            ).count()
             
-            count = result.scalar() or 0
             return {'count': count}
         except Exception as e:
             print(f"Error fetching alert count for user {user_id}: {e}")
@@ -545,39 +539,39 @@ def create_app(config_name='default'):
     @app.route('/api/messages/ticket/<ticket_id>/timeline')
     def ticket_timeline(ticket_id):
         try:
-            from sqlalchemy import text
+            from app.models import Ticket, Message, User
             
-            # Get ticket ID from ticket_id string
-            ticket_result = db.session.execute(text("""
-                SELECT id FROM tickets WHERE ticket_id = :ticket_id
-            """), {'ticket_id': ticket_id})
-            
-            ticket_row = ticket_result.fetchone()
-            if not ticket_row:
+            # Get ticket using ORM
+            ticket = Ticket.query.filter_by(ticket_id=ticket_id).first()
+            if not ticket:
                 return []
             
-            internal_ticket_id = ticket_row[0]
-            
-            # Get messages from database
-            result = db.session.execute(text("""
-                SELECT m.id, m.message, m.created_at, m.sender_id, u.name, u.role, m.image_url
-                FROM messages m
-                LEFT JOIN users u ON m.sender_id = u.id
-                WHERE m.ticket_id = :ticket_id
-                ORDER BY m.created_at ASC
-            """), {'ticket_id': internal_ticket_id})
+            # Get messages using ORM with join
+            messages_query = db.session.query(
+                Message.id,
+                Message.message,
+                Message.created_at,
+                Message.sender_id,
+                User.name,
+                User.role,
+                Message.image_url
+            ).outerjoin(
+                User, Message.sender_id == User.id
+            ).filter(
+                Message.ticket_id == ticket.id
+            ).order_by(Message.created_at.asc()).all()
             
             messages = []
-            for row in result:
+            for row in messages_query:
                 messages.append({
-                    'id': row[0],
+                    'id': row.id,
                     'ticket_id': ticket_id,
-                    'sender_id': row[3],
-                    'sender_name': row[4] or 'Unknown User',
-                    'sender_role': row[5] or 'Normal User',
-                    'message': row[1],
-                    'image_url': row[6],  # Include Cloudinary URL
-                    'timestamp': row[2].isoformat() + 'Z' if row[2] else None,
+                    'sender_id': row.sender_id,
+                    'sender_name': row.name or 'Unknown User',
+                    'sender_role': row.role or 'Normal User',
+                    'message': row.message,
+                    'image_url': row.image_url,
+                    'timestamp': row.created_at.isoformat() + 'Z' if row.created_at else None,
                     'type': 'message'
                 })
             
@@ -593,50 +587,49 @@ def create_app(config_name='default'):
     @app.route('/api/tickets/<ticket_id>/activities')
     def ticket_activities(ticket_id):
         try:
-            from sqlalchemy import text
+            from app.models import Ticket, User
             
             activities = []
             
-            # Get ticket creation activity
-            ticket_result = db.session.execute(text("""
-                SELECT t.created_at, u.name as creator_name, t.status, t.assigned_to, t.updated_at
-                FROM tickets t
-                LEFT JOIN users u ON t.created_by = u.id
-                WHERE t.ticket_id = :ticket_id OR t.id = :ticket_id
-            """), {'ticket_id': ticket_id})
+            # Get ticket using ORM
+            ticket = None
+            if ticket_id.isdigit():
+                ticket = Ticket.query.get(int(ticket_id))
+            if not ticket:
+                ticket = Ticket.query.filter_by(ticket_id=ticket_id).first()
             
-            ticket_row = ticket_result.fetchone()
-            if ticket_row:
+            if ticket:
+                # Get creator name
+                creator = User.query.get(ticket.created_by) if ticket.created_by else None
+                creator_name = creator.name if creator else "Unknown User"
+                
                 # Ticket creation
                 activities.append({
                     'id': f'create_{ticket_id}',
                     'ticket_id': ticket_id,
-                    'description': f'Ticket created by {ticket_row[1] or "Unknown User"}',
+                    'description': f'Ticket created by {creator_name}',
                     'performed_by': 'system',
                     'performed_by_name': 'System',
-                    'created_at': ticket_row[0].isoformat() + 'Z' if ticket_row[0] else None,
-                    'timestamp': ticket_row[0].isoformat() + 'Z' if ticket_row[0] else None
+                    'created_at': ticket.created_at.isoformat() + 'Z' if ticket.created_at else None,
+                    'timestamp': ticket.created_at.isoformat() + 'Z' if ticket.created_at else None
                 })
                 
                 # Status change activity (if updated)
-                if ticket_row[4] and ticket_row[4] != ticket_row[0]:  # updated_at != created_at
+                if ticket.updated_at and ticket.updated_at != ticket.created_at:
                     activities.append({
                         'id': f'status_{ticket_id}',
                         'ticket_id': ticket_id,
-                        'description': f'Status changed to {ticket_row[2]}',
+                        'description': f'Status changed to {ticket.status}',
                         'performed_by': 'system',
                         'performed_by_name': 'System',
-                        'created_at': ticket_row[4].isoformat() + 'Z' if ticket_row[4] else None,
-                        'timestamp': ticket_row[4].isoformat() + 'Z' if ticket_row[4] else None
+                        'created_at': ticket.updated_at.isoformat() + 'Z' if ticket.updated_at else None,
+                        'timestamp': ticket.updated_at.isoformat() + 'Z' if ticket.updated_at else None
                     })
                 
                 # Assignment activity (if assigned)
-                if ticket_row[3]:  # assigned_to exists
-                    agent_result = db.session.execute(text("""
-                        SELECT name FROM users WHERE id = :agent_id
-                    """), {'agent_id': ticket_row[3]})
-                    agent_row = agent_result.fetchone()
-                    agent_name = agent_row[0] if agent_row else f'Agent {ticket_row[3]}'
+                if ticket.assigned_to:
+                    agent = User.query.get(ticket.assigned_to)
+                    agent_name = agent.name if agent else f'Agent {ticket.assigned_to}'
                     
                     activities.append({
                         'id': f'assign_{ticket_id}',
@@ -644,8 +637,8 @@ def create_app(config_name='default'):
                         'description': f'Assigned to {agent_name}',
                         'performed_by': 'system',
                         'performed_by_name': 'System',
-                        'created_at': ticket_row[4].isoformat() + 'Z' if ticket_row[4] else None,
-                        'timestamp': ticket_row[4].isoformat() + 'Z' if ticket_row[4] else None
+                        'created_at': ticket.updated_at.isoformat() + 'Z' if ticket.updated_at else None,
+                        'timestamp': ticket.updated_at.isoformat() + 'Z' if ticket.updated_at else None
                     })
             
             # Add any stored activities from memory
@@ -862,27 +855,34 @@ def create_app(config_name='default'):
             return '', 200
         
         try:
-            from sqlalchemy import text
+            from app.models import Alert, Ticket
             
-            result = db.session.execute(text("""
-                SELECT a.id, a.title, a.message, a.alert_type, a.is_read, a.created_at, t.ticket_id
-                FROM alerts a
-                LEFT JOIN tickets t ON a.ticket_id = t.id
-                WHERE a.user_id = :user_id
-                ORDER BY a.created_at DESC
-                LIMIT 20
-            """), {'user_id': user_id})
+            alerts_query = db.session.query(
+                Alert.id,
+                Alert.title,
+                Alert.message,
+                Alert.alert_type,
+                Alert.is_read,
+                Alert.created_at,
+                Ticket.ticket_id
+            ).outerjoin(
+                Ticket, Alert.ticket_id == Ticket.id
+            ).filter(
+                Alert.user_id == user_id
+            ).order_by(
+                Alert.created_at.desc()
+            ).limit(20).all()
             
             alerts = []
-            for row in result:
+            for row in alerts_query:
                 alerts.append({
-                    'id': row[0],
-                    'title': row[1],
-                    'message': row[2],
-                    'alert_type': row[3],
-                    'is_read': row[4],
-                    'created_at': row[5].isoformat() + 'Z' if row[5] else None,
-                    'ticket_id': row[6]
+                    'id': row.id,
+                    'title': row.title,
+                    'message': row.message,
+                    'alert_type': row.alert_type,
+                    'is_read': row.is_read,
+                    'created_at': row.created_at.isoformat() + 'Z' if row.created_at else None,
+                    'ticket_id': row.ticket_id
                 })
             
             return alerts
