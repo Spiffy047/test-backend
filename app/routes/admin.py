@@ -4,6 +4,61 @@ from sqlalchemy import text
 
 admin_bp = Blueprint('admin', __name__)
 
+@admin_bp.route('/database-info', methods=['GET'])
+def database_info():
+    """Get current database tables and structure"""
+    try:
+        # Get all tables
+        tables_result = db.session.execute(text("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public'
+            ORDER BY table_name
+        """))
+        
+        tables_info = {}
+        
+        for table_row in tables_result:
+            table_name = table_row[0]
+            
+            # Get columns for each table
+            columns_result = db.session.execute(text("""
+                SELECT column_name, data_type, is_nullable, column_default
+                FROM information_schema.columns 
+                WHERE table_name = :table_name
+                ORDER BY ordinal_position
+            """), {'table_name': table_name})
+            
+            columns = []
+            for col_row in columns_result:
+                columns.append({
+                    'name': col_row[0],
+                    'type': col_row[1],
+                    'nullable': col_row[2] == 'YES',
+                    'default': col_row[3]
+                })
+            
+            # Get row count
+            count_result = db.session.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
+            row_count = count_result.scalar()
+            
+            tables_info[table_name] = {
+                'columns': columns,
+                'row_count': row_count
+            }
+        
+        return jsonify({
+            "success": True,
+            "tables": tables_info,
+            "total_tables": len(tables_info)
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
 @admin_bp.route('/fix-ticket-numbering', methods=['POST'])
 def fix_ticket_numbering():
     """Fix ticket numbering to TKT-XXXX format"""
