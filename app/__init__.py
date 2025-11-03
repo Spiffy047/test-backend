@@ -188,15 +188,15 @@ def create_app(config_name='default'):
     def test_users():
         """Test endpoint to check users without JWT protection"""
         try:
-            from sqlalchemy import text
-            result = db.session.execute(text("SELECT id, name, email, role FROM users LIMIT 5"))
+            from app.models import User
+            users_query = User.query.limit(5).all()
             users = []
-            for row in result:
+            for user in users_query:
                 users.append({
-                    'id': row[0],
-                    'name': row[1], 
-                    'email': row[2],
-                    'role': row[3]
+                    'id': user.id,
+                    'name': user.name, 
+                    'email': user.email,
+                    'role': user.role
                 })
             return {'users': users, 'count': len(users)}
         except Exception as e:

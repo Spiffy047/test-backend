@@ -8,39 +8,52 @@ admin_bp = Blueprint('admin', __name__)
 def database_info():
     """Get current database tables and structure"""
     try:
-        # Get all tables
-        tables_result = db.session.execute(text("""
-            SELECT table_name 
-            FROM information_schema.tables 
-            WHERE table_schema = 'public'
-            ORDER BY table_name
-        """))
+        # Get all tables using ORM introspection
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        table_names = inspector.get_table_names()
         
         tables_info = {}
         
-        for table_row in tables_result:
-            table_name = table_row[0]
-            
-            # Get columns for each table
-            columns_result = db.session.execute(text("""
-                SELECT column_name, data_type, is_nullable, column_default
-                FROM information_schema.columns 
-                WHERE table_name = :table_name
-                ORDER BY ordinal_position
-            """), {'table_name': table_name})
+        for table_name in sorted(table_names):
+            # Get columns for each table using introspection
+            columns_info = inspector.get_columns(table_name)
             
             columns = []
-            for col_row in columns_result:
+            for col_info in columns_info:
                 columns.append({
-                    'name': col_row[0],
-                    'type': col_row[1],
-                    'nullable': col_row[2] == 'YES',
-                    'default': col_row[3]
+                    'name': col_info['name'],
+                    'type': str(col_info['type']),
+                    'nullable': col_info['nullable'],
+                    'default': str(col_info['default']) if col_info['default'] else None
                 })
             
-            # Get row count
-            count_result = db.session.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
-            row_count = count_result.scalar()
+            # Get row count using ORM
+            try:
+                # Try to get the model class dynamically
+                model_class = None
+                if table_name == 'users':
+                    from app.models import User
+                    model_class = User
+                elif table_name == 'tickets':
+                    from app.models import Ticket
+                    model_class = Ticket
+                elif table_name == 'messages':
+                    from app.models import Message
+                    model_class = Message
+                elif table_name == 'alerts':
+                    from app.models import Alert
+                    model_class = Alert
+                
+                if model_class:
+                    row_count = model_class.query.count()
+                else:
+                    # Fallback for tables without models
+                    from sqlalchemy import text
+                    count_result = db.session.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
+                    row_count = count_result.scalar()
+            except:
+                row_count = 0
             
             tables_info[table_name] = {
                 'columns': columns,
@@ -63,11 +76,9 @@ def database_info():
 def fix_ticket_numbering():
     """Fix ticket numbering to TKT-XXXX format"""
     try:
-        # Get all tickets ordered by creation date using raw SQL
-        result = db.session.execute(text("""
-            SELECT id, created_at FROM tickets ORDER BY created_at
-        """))
-        tickets = result.fetchall()
+        # Get all tickets ordered by creation date using ORM
+        from app.models import Ticket
+        tickets = Ticket.query.order_by(Ticket.created_at).all()
         
         # Update all tickets with proper TKT-XXXX format using SQL
         db.session.execute(text("""

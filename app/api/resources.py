@@ -25,25 +25,20 @@ class AuthResource(Resource):
             if not email or not password:
                 return {'success': False, 'message': 'Email and password required'}, 400
             
-            # Fast query with index on email
-            from sqlalchemy import text
-            result = db.session.execute(text(
-                "SELECT id, name, email, role FROM users WHERE email = :email LIMIT 1"
-            ), {'email': email})
-            
-            user_row = result.fetchone()
-            if not user_row:
+            # Fast query with ORM
+            user = User.query.filter_by(email=email).first()
+            if not user:
                 return {'success': False, 'message': 'Invalid credentials'}, 401
             
             # Fast login - skip password hashing for development
-            access_token = create_access_token(identity=user_row[0])
+            access_token = create_access_token(identity=user.id)
             return {
                 'success': True,
                 'user': {
-                    'id': user_row[0],
-                    'name': user_row[1],
-                    'email': user_row[2],
-                    'role': user_row[3]
+                    'id': user.id,
+                    'name': user.name,
+                    'email': user.email,
+                    'role': user.role
                 },
                 'access_token': access_token
             }
@@ -88,22 +83,17 @@ class AuthMeResource(Resource):
                 # Fallback: Use test user for development
                 print(f"JWT validation failed, using fallback: {jwt_error}")
                 
-                from sqlalchemy import text
-                result = db.session.execute(text(
-                    "SELECT id, name, email, role, is_verified, created_at FROM users WHERE id = 16"
-                ))
-                
-                user_row = result.fetchone()
-                if not user_row:
+                user = User.query.get(16)
+                if not user:
                     return {'error': 'User not found'}, 404
                 
                 return {
-                    'id': user_row[0],
-                    'name': user_row[1],
-                    'email': user_row[2],
-                    'role': user_row[3],
-                    'is_verified': user_row[4] if user_row[4] is not None else True,
-                    'created_at': user_row[5].isoformat() if user_row[5] else None,
+                    'id': user.id,
+                    'name': user.name,
+                    'email': user.email,
+                    'role': user.role,
+                    'is_verified': user.is_verified if user.is_verified is not None else True,
+                    'created_at': user.created_at.isoformat() if user.created_at else None,
                     'auth_mode': 'fallback'
                 }
             
@@ -329,23 +319,28 @@ class TicketListResource(Resource):
         calculates current workload, and assigns to agent with least active tickets.
         """
         try:
-            from sqlalchemy import text
+            # Get agents with their current workload using ORM
+            from sqlalchemy import func
             
-            # Get agents with their current workload
-            result = db.session.execute(text("""
-                SELECT u.id, u.name, COUNT(t.id) as workload
-                FROM users u
-                LEFT JOIN tickets t ON u.id = t.assigned_to AND t.status NOT IN ('Resolved', 'Closed')
-                WHERE u.role IN ('Technical User', 'Technical Supervisor')
-                GROUP BY u.id, u.name
-                ORDER BY workload ASC, u.id ASC
-                LIMIT 1
-            """))
+            agents_workload = db.session.query(
+                User.id,
+                User.name,
+                func.count(Ticket.id).label('workload')
+            ).outerjoin(
+                Ticket, 
+                (User.id == Ticket.assigned_to) & 
+                (~Ticket.status.in_(['Resolved', 'Closed']))
+            ).filter(
+                User.role.in_(['Technical User', 'Technical Supervisor'])
+            ).group_by(
+                User.id, User.name
+            ).order_by(
+                'workload', User.id
+            ).first()
             
-            agent = result.fetchone()
-            if agent:
-                print(f"Auto-assigned to agent: {agent[1]} (ID: {agent[0]}, workload: {agent[2]})")
-                return agent[0]
+            if agents_workload:
+                print(f"Auto-assigned to agent: {agents_workload.name} (ID: {agents_workload.id}, workload: {agents_workload.workload})")
+                return agents_workload.id
             else:
                 print(f"No agents available for assignment")
                 return None
@@ -693,33 +688,40 @@ class AnalyticsResource(Resource):
             }
         elif endpoint == 'agent-performance':
             try:
-                from sqlalchemy import text
+                from sqlalchemy import func, case, extract
                 
-                result = db.session.execute(text("""
-                    SELECT 
-                        u.id, u.name,
-                        COUNT(CASE WHEN t.status IN ('Resolved', 'Closed') THEN 1 END) as tickets_closed,
-                        AVG(CASE WHEN t.status IN ('Resolved', 'Closed') AND t.resolved_at IS NOT NULL THEN 
-                            EXTRACT(EPOCH FROM (t.resolved_at - t.created_at))/3600 END) as avg_handle_time,
-                        COUNT(CASE WHEN t.sla_violated = true THEN 1 END) as sla_violations
-                    FROM users u
-                    LEFT JOIN tickets t ON u.id = t.assigned_to
-                    WHERE u.role IN ('Technical User', 'Technical Supervisor')
-                    GROUP BY u.id, u.name
-                """))
+                # Get agent performance using ORM
+                result = db.session.query(
+                    User.id,
+                    User.name,
+                    func.count(case([(Ticket.status.in_(['Resolved', 'Closed']), 1)])).label('tickets_closed'),
+                    func.avg(
+                        case([
+                            ((Ticket.status.in_(['Resolved', 'Closed'])) & (Ticket.resolved_at.isnot(None)),
+                             extract('epoch', Ticket.resolved_at - Ticket.created_at) / 3600)
+                        ])
+                    ).label('avg_handle_time'),
+                    func.count(case([(Ticket.sla_violated == True, 1)])).label('sla_violations')
+                ).outerjoin(
+                    Ticket, User.id == Ticket.assigned_to
+                ).filter(
+                    User.role.in_(['Technical User', 'Technical Supervisor'])
+                ).group_by(
+                    User.id, User.name
+                ).all()
                 
                 agents = []
                 for row in result:
-                    closed = row[2] or 0
-                    violations = row[4] or 0
+                    closed = row.tickets_closed or 0
+                    violations = row.sla_violations or 0
                     score = max(0, (closed * 10) - (violations * 5))
                     rating = 'Excellent' if score >= 50 else 'Good' if score >= 30 else 'Average' if score >= 15 else 'Needs Improvement'
                     
                     agents.append({
-                        'id': row[0],
-                        'name': row[1],
+                        'id': row.id,
+                        'name': row.name,
                         'tickets_closed': closed,
-                        'avg_handle_time': round(row[3] or 0, 1),
+                        'avg_handle_time': round(row.avg_handle_time or 0, 1),
                         'sla_violations': violations,
                         'rating': rating
                     })
@@ -771,13 +773,13 @@ class MigrateTicketIDsResource(Resource):
             ticket_counter = 1001
             
             # Check if we already have TKT-XXXX tickets and start from the highest number
-            existing_tkt_tickets = db.session.execute(
-                text("SELECT ticket_id FROM tickets WHERE ticket_id LIKE 'TKT-%' ORDER BY ticket_id DESC LIMIT 1")
-            ).fetchone()
+            existing_tkt_ticket = Ticket.query.filter(
+                Ticket.ticket_id.like('TKT-%')
+            ).order_by(Ticket.ticket_id.desc()).first()
             
-            if existing_tkt_tickets:
+            if existing_tkt_ticket:
                 try:
-                    last_num = int(existing_tkt_tickets[0].split('-')[1])
+                    last_num = int(existing_tkt_ticket.ticket_id.split('-')[1])
                     ticket_counter = last_num + 1
                 except (ValueError, IndexError):
                     pass
@@ -896,50 +898,52 @@ class TimelineDebugResource(Resource):
     def get(self, ticket_id):
         """Debug ticket timeline data and message retrieval"""
         try:
-            from sqlalchemy import text
+            # Get ticket info using ORM
+            ticket = None
+            if ticket_id.isdigit():
+                ticket = Ticket.query.get(int(ticket_id))
+            if not ticket:
+                ticket = Ticket.query.filter_by(ticket_id=ticket_id).first()
             
-            # Get ticket info
-            ticket_result = db.session.execute(text(
-                "SELECT id, ticket_id, title FROM tickets WHERE ticket_id = :ticket_id OR id = :ticket_id"
-            ), {'ticket_id': ticket_id})
-            
-            ticket_row = ticket_result.fetchone()
-            if not ticket_row:
+            if not ticket:
                 return {'error': 'Ticket not found', 'ticket_id': ticket_id}
             
-            internal_id = ticket_row[0]
-            
-            # Get all messages for this ticket
-            messages_result = db.session.execute(text("""
-                SELECT m.id, m.message, m.created_at, m.sender_id, u.name, u.role
-                FROM messages m
-                LEFT JOIN users u ON m.sender_id = u.id
-                WHERE m.ticket_id = :ticket_id
-                ORDER BY m.created_at DESC
-            """), {'ticket_id': internal_id})
+            # Get all messages for this ticket using ORM
+            messages_query = db.session.query(
+                Message.id,
+                Message.message,
+                Message.created_at,
+                Message.sender_id,
+                User.name,
+                User.role
+            ).outerjoin(
+                User, Message.sender_id == User.id
+            ).filter(
+                Message.ticket_id == ticket.id
+            ).order_by(Message.created_at.desc())
             
             messages = []
-            for row in messages_result:
+            for row in messages_query:
                 messages.append({
-                    'id': row[0],
-                    'message': row[1],
-                    'created_at': row[2].isoformat() if row[2] else None,
-                    'sender_id': row[3],
-                    'sender_name': row[4] or 'Unknown',
-                    'sender_role': row[5] or 'Unknown'
+                    'id': row.id,
+                    'message': row.message,
+                    'created_at': row.created_at.isoformat() if row.created_at else None,
+                    'sender_id': row.sender_id,
+                    'sender_name': row.name or 'Unknown',
+                    'sender_role': row.role or 'Unknown'
                 })
             
             return {
                 'ticket': {
-                    'internal_id': internal_id,
-                    'ticket_id': ticket_row[1],
-                    'title': ticket_row[2]
+                    'internal_id': ticket.id,
+                    'ticket_id': ticket.ticket_id,
+                    'title': ticket.title
                 },
                 'messages': messages,
                 'message_count': len(messages),
                 'debug_info': {
                     'searched_ticket_id': ticket_id,
-                    'found_internal_id': internal_id
+                    'found_internal_id': ticket.id
                 }
             }
             
