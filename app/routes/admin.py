@@ -6,9 +6,8 @@ admin_bp = Blueprint('admin', __name__)
 
 @admin_bp.route('/database-info', methods=['GET'])
 def database_info():
-    """Get current database tables and structure"""
     try:
-        # Get all tables using ORM introspection
+
         from sqlalchemy import inspect
         inspector = inspect(db.engine)
         table_names = inspector.get_table_names()
@@ -16,7 +15,7 @@ def database_info():
         tables_info = {}
         
         for table_name in sorted(table_names):
-            # Get columns for each table using introspection
+
             columns_info = inspector.get_columns(table_name)
             
             columns = []
@@ -28,9 +27,9 @@ def database_info():
                     'default': str(col_info['default']) if col_info['default'] else None
                 })
             
-            # Get row count using ORM
+
             try:
-                # Try to get the model class dynamically
+
                 model_class = None
                 if table_name == 'users':
                     from app.models import User
@@ -48,9 +47,9 @@ def database_info():
                 if model_class:
                     row_count = model_class.query.count()
                 else:
-                    # Fallback for tables without models - use ORM introspection
+
                     try:
-                        # Try to get count using SQLAlchemy core (not raw SQL)
+    
                         from sqlalchemy import MetaData, Table
                         metadata = MetaData()
                         table = Table(table_name, metadata, autoload_with=db.engine)
@@ -79,29 +78,27 @@ def database_info():
 
 @admin_bp.route('/fix-ticket-numbering', methods=['POST'])
 def fix_ticket_numbering():
-    """Fix ticket numbering to TKT-XXXX format"""
     try:
-        # Get all tickets ordered by creation date using ORM
+
         from app.models import Ticket
         tickets = Ticket.query.order_by(Ticket.created_at).all()
         
-        # Update tickets using ORM (safer approach)
+
         ticket_counter = 1001
         for ticket in tickets:
-            # Generate new ticket ID
+
             new_ticket_id = f'TKT-{ticket_counter:04d}'
             
-            # Ensure uniqueness
+
             while Ticket.query.filter_by(ticket_id=new_ticket_id).first():
                 ticket_counter += 1
                 new_ticket_id = f'TKT-{ticket_counter:04d}'
             
-            # Update ticket
+
             ticket.ticket_id = new_ticket_id
             ticket_counter += 1
         
-        # Note: Related table updates would need to be handled by proper foreign key relationships
-        # Sequence creation is PostgreSQL-specific DDL that should remain as raw SQL if needed
+
         next_number = len(tickets) + 1001
         from sqlalchemy import text
         db.session.execute(text("DROP SEQUENCE IF EXISTS ticket_id_seq CASCADE"))

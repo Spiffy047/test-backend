@@ -1,25 +1,21 @@
-"""
-Notification Service for IT ServiceDesk
-Handles alert creation, management, and delivery
-"""
+"""Notification Service for alert management"""
 
 from datetime import datetime
 from app import db
 from app.models import Alert, User, Ticket
 
 class NotificationService:
-    """Enhanced notification service for comprehensive alert management"""
+    """Notification service for alert management"""
     
     @staticmethod
     def create_alert(user_id, ticket_id, alert_type, title, message):
-        """Create a new alert with validation"""
         try:
-            # Validate user exists
+
             user = User.query.get(user_id)
             if not user:
                 raise ValueError(f"User {user_id} not found")
             
-            # Validate ticket exists if provided
+
             if ticket_id:
                 ticket = Ticket.query.get(ticket_id)
                 if not ticket:
@@ -46,7 +42,6 @@ class NotificationService:
     
     @staticmethod
     def create_assignment_alert(user_id, ticket_id, ticket_title, priority):
-        """Create assignment alert with enhanced details"""
         title = f"New Ticket Assigned"
         message = f"You have been assigned ticket {ticket_id}: {ticket_title} (Priority: {priority})"
         
@@ -60,7 +55,6 @@ class NotificationService:
     
     @staticmethod
     def create_sla_alert(user_id, ticket_id, ticket_title, hours_remaining):
-        """Create SLA violation warning alert"""
         title = f"SLA Warning: {ticket_id}"
         message = f"Ticket {ticket_id}: {ticket_title} has {hours_remaining} hours remaining before SLA violation"
         
@@ -74,7 +68,6 @@ class NotificationService:
     
     @staticmethod
     def create_escalation_alert(supervisor_ids, ticket_id, ticket_title, reason):
-        """Create escalation alerts for supervisors"""
         alerts = []
         title = f"Ticket Escalated: {ticket_id}"
         message = f"Ticket {ticket_id}: {ticket_title} has been escalated. Reason: {reason}"
@@ -93,9 +86,8 @@ class NotificationService:
     
     @staticmethod
     def get_user_alerts(user_id, limit=20, unread_only=False):
-        """Get alerts for a specific user with enhanced filtering"""
         try:
-            # Use ORM query with joins
+
             query = db.session.query(
                 Alert.id,
                 Alert.title,
@@ -140,7 +132,6 @@ class NotificationService:
     
     @staticmethod
     def mark_alert_read(alert_id, user_id=None):
-        """Mark specific alert as read with user validation"""
         try:
             query = Alert.query.filter_by(id=alert_id)
             if user_id:
@@ -161,9 +152,8 @@ class NotificationService:
     
     @staticmethod
     def mark_all_alerts_read(user_id):
-        """Mark all alerts as read for a user"""
         try:
-            # Use ORM update
+
             Alert.query.filter_by(
                 user_id=user_id, 
                 is_read=False
@@ -179,9 +169,8 @@ class NotificationService:
     
     @staticmethod
     def get_alert_count(user_id, unread_only=True):
-        """Get count of alerts for a user"""
         try:
-            # Use ORM count
+
             query = Alert.query.filter_by(user_id=user_id)
             if unread_only:
                 query = query.filter_by(is_read=False)
@@ -194,12 +183,11 @@ class NotificationService:
     
     @staticmethod
     def cleanup_old_alerts(days_old=30):
-        """Clean up old read alerts to maintain performance"""
         try:
             from datetime import timedelta
             cutoff_date = datetime.utcnow() - timedelta(days=days_old)
             
-            # Use ORM delete
+
             old_alerts = Alert.query.filter(
                 Alert.is_read == True,
                 Alert.created_at < cutoff_date

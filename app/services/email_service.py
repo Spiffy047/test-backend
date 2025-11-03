@@ -1,13 +1,23 @@
+# Email service using SendGrid for notifications
+
 import os
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
 class EmailService:
+    """Email notification service using SendGrid"""
+    
     def __init__(self):
+        """Initialize SendGrid client with API credentials"""
+        # Initialize SendGrid client with API key from environment
         self.sg = SendGridAPIClient(api_key=os.environ.get('SENDGRID_API_KEY'))
+        # Set sender email from environment or use default
         self.from_email = os.environ.get('SENDGRID_FROM_EMAIL', 'mwanikijoe1@gmail.com')
     
     def send_ticket_notification(self, to_email, ticket_id, ticket_title, message_type='created'):
+        """Send ticket notification email based on event type"""
+        
+        # Email subject templates for different notification types
         subject_map = {
             'created': f'New Ticket Created: {ticket_id}',
             'assigned': f'Ticket Assigned: {ticket_id}',
@@ -15,6 +25,7 @@ class EmailService:
             'closed': f'Ticket Resolved: {ticket_id}'
         }
         
+        # Email content templates for different notification types
         content_map = {
             'created': f'A new support ticket has been created.\n\nTicket ID: {ticket_id}\nTitle: {ticket_title}\n\nYou can view and track this ticket in your dashboard.',
             'assigned': f'A ticket has been assigned to you.\n\nTicket ID: {ticket_id}\nTitle: {ticket_title}\n\nPlease review and take action as needed.',
@@ -22,6 +33,7 @@ class EmailService:
             'closed': f'Your ticket has been resolved.\n\nTicket ID: {ticket_id}\nTitle: {ticket_title}\n\nThank you for using our support system.'
         }
         
+        # Create email message
         message = Mail(
             from_email=self.from_email,
             to_emails=to_email,
@@ -29,6 +41,7 @@ class EmailService:
             plain_text_content=content_map.get(message_type, f'Ticket {ticket_id} notification.')
         )
         
+        # Send email via SendGrid
         try:
             response = self.sg.send(message)
             return True
@@ -37,6 +50,9 @@ class EmailService:
             return False
     
     def send_sla_violation_alert(self, to_email, ticket_id, ticket_title):
+        """Send urgent SLA violation alert email"""
+        
+        # Create urgent SLA violation email
         message = Mail(
             from_email=self.from_email,
             to_emails=to_email,
@@ -44,6 +60,7 @@ class EmailService:
             plain_text_content=f'URGENT: SLA violation detected.\n\nTicket ID: {ticket_id}\nTitle: {ticket_title}\n\nImmediate attention required.'
         )
         
+        # Send urgent alert
         try:
             response = self.sg.send(message)
             return True
@@ -52,8 +69,12 @@ class EmailService:
             return False
     
     def send_verification_email(self, to_email, verification_token, user_name):
+        """Send email verification link to new users"""
+        
+        # Build verification URL for frontend
         verification_url = f"https://hotfix-frontend.vercel.app/verify-email?token={verification_token}"
         
+        # Create HTML email with verification link
         message = Mail(
             from_email=self.from_email,
             to_emails=to_email,
@@ -74,6 +95,7 @@ class EmailService:
             '''
         )
         
+        # Send verification email
         try:
             response = self.sg.send(message)
             return True

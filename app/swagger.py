@@ -1,15 +1,17 @@
+# Swagger API documentation using Flask-RESTX
+
 from flask_restx import Api, Resource, fields, Namespace
 from flask import Blueprint
 
-# Create Swagger API blueprint
+# Create blueprint for Swagger documentation
 swagger_bp = Blueprint('swagger', __name__)
 
-# Initialize Flask-RESTX API with comprehensive Swagger documentation
+# Initialize comprehensive API documentation
 api = Api(
     swagger_bp,
     version='3.0',
     title='IT ServiceDesk API',
-    description='Complete REST API for IT ServiceDesk Platform with intelligent auto-assignment, advanced file upload system, and comprehensive analytics. Live at https://hotfix.onrender.com/api with frontend at https://hotfix-ochre.vercel.app',
+    description='Complete REST API for IT ServiceDesk Platform with auto-assignment and analytics',
     doc='/',
     contact={
         'name': 'IT ServiceDesk Support',
@@ -30,17 +32,18 @@ api = Api(
     security='Bearer'
 )
 
-# Create namespaces for API organization
-auth_ns = Namespace('auth', description='Authentication and user session management')
-tickets_ns = Namespace('tickets', description='Ticket management with intelligent auto-assignment and SLA tracking')
-users_ns = Namespace('users', description='User management with role-based access control')
-messages_ns = Namespace('messages', description='Real-time messaging and ticket timeline')
-upload_ns = Namespace('upload', description='File and image uploads via Cloudinary with timeline integration')
-analytics_ns = Namespace('analytics', description='Real-time analytics, reporting, and dashboard metrics')
-config_ns = Namespace('config', description='Dynamic system configuration and settings management')
-agents_ns = Namespace('agents', description='Agent management and workload tracking')
+# Organize API endpoints into logical namespaces
+auth_ns = Namespace('auth', description='Authentication and user sessions')
+tickets_ns = Namespace('tickets', description='Ticket management with auto-assignment')
+users_ns = Namespace('users', description='User management with role-based access')
+messages_ns = Namespace('messages', description='Messaging and ticket timeline')
+upload_ns = Namespace('upload', description='File uploads via Cloudinary')
+analytics_ns = Namespace('analytics', description='Analytics and dashboard metrics')
+config_ns = Namespace('config', description='System configuration management')
+agents_ns = Namespace('agents', description='Agent management and workload')
 alerts_ns = Namespace('alerts', description='Notification and alert system')
 
+# Register all namespaces with the API
 api.add_namespace(auth_ns)
 api.add_namespace(tickets_ns)
 api.add_namespace(users_ns)

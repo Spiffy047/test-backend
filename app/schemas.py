@@ -30,7 +30,6 @@ class TicketSchema(Schema):
     resolved_at = fields.DateTime(allow_none=True)
     sla_violated = fields.Bool(dump_only=True)
     
-    # Nested fields
     creator = fields.Nested(UserSchema, only=['id', 'name', 'email'], dump_only=True)
     assignee = fields.Nested(UserSchema, only=['id', 'name', 'email'], dump_only=True)
     
@@ -44,7 +43,6 @@ class MessageSchema(Schema):
     message = fields.Str(required=True, validate=validate.Length(min=1))
     created_at = fields.DateTime(dump_only=True)
     
-    # Nested fields
     sender = fields.Nested(UserSchema, only=['id', 'name', 'role'], dump_only=True)
     
     class Meta:
@@ -54,7 +52,7 @@ class LoginSchema(Schema):
     email = fields.Email(required=True)
     password = fields.Str(required=True, validate=validate.Length(min=6))
 
-# Schema instances
+
 user_schema = UserSchema()
 users_schema = UserSchema(many=True)
 ticket_schema = TicketSchema()

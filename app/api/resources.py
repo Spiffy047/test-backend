@@ -1,10 +1,12 @@
-# IT ServiceDesk API Resources
-# Flask-RESTful API endpoints with intelligent auto-assignment and file upload support
+# Flask-RESTful API resources for IT ServiceDesk
 
+# Core Flask and REST imports
 from flask import request
 from flask_restful import Resource
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from marshmallow import ValidationError
+
+# Application imports
 from app import db
 from app.models import User, Ticket, Message
 from app.schemas import (
@@ -14,24 +16,29 @@ from app.schemas import (
 from app.services.email_service import EmailService
 
 class AuthResource(Resource):
-    """User authentication with JWT token generation and fast password checking"""
+    """User authentication with JWT token generation"""
     
     def post(self):
+        """Authenticate user and return JWT token"""
         try:
+            # Parse login credentials from request
             data = request.get_json()
             email = data.get('email')
             password = data.get('password')
             
+            # Validate required fields
             if not email or not password:
                 return {'success': False, 'message': 'Email and password required'}, 400
             
-            # Fast query with ORM
+            # Find user by email
             user = User.query.filter_by(email=email).first()
             if not user:
                 return {'success': False, 'message': 'Invalid credentials'}, 401
             
-            # Fast login - skip password hashing for development
+            # Generate JWT token (password validation skipped for development)
             access_token = create_access_token(identity=user.id)
+            
+            # Return user info and token
             return {
                 'success': True,
                 'user': {
@@ -47,29 +54,31 @@ class AuthResource(Resource):
             return {'success': False, 'message': str(e)}, 500
 
 class AuthMeResource(Resource):
-    """Current user information endpoint with JWT validation and fallback support"""
+    """Current user information endpoint with JWT validation"""
     
     def get(self):
-        """Get current user info with JWT validation and development fallback"""
+        """Get current authenticated user information"""
         try:
+            # Extract Authorization header
             auth_header = request.headers.get('Authorization')
             if not auth_header or not auth_header.startswith('Bearer '):
                 return {'error': 'Authorization token required'}, 401
             
-            # Extract token
+            # Parse JWT token from header
             token = auth_header.split(' ')[1]
             
-            # Try JWT validation first
+            # Validate JWT token and get user ID
             try:
                 from flask_jwt_extended import decode_token
                 decoded_token = decode_token(token)
                 user_id = decoded_token['sub']
                 
-                # Get user from database
+                # Fetch user from database
                 user = User.query.get(user_id)
                 if not user:
                     return {'error': 'User not found'}, 404
                 
+                # Return user profile data
                 return {
                     'id': user.id,
                     'name': user.name,
@@ -80,7 +89,7 @@ class AuthMeResource(Resource):
                 }
                 
             except Exception as jwt_error:
-                # Fallback: Use test user for development
+                # Development fallback: use test user (ID 16)
                 print(f"JWT validation failed, using fallback: {jwt_error}")
                 
                 user = User.query.get(16)
@@ -101,29 +110,33 @@ class AuthMeResource(Resource):
             return {'error': str(e)}, 500
 
 class TicketListResource(Resource):
-    """Ticket management with intelligent auto-assignment and file upload support"""
+    """Ticket management with auto-assignment"""
     
     def get(self):
-        """Get paginated list of tickets with agent name resolution"""
+        """Get paginated list of tickets with filtering"""
+        # Parse pagination and filter parameters
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 10, type=int)
         created_by = request.args.get('created_by')
         status = request.args.get('status')
         
+        # Build query with optional filters
         query = Ticket.query
         if created_by:
             query = query.filter_by(created_by=created_by)
         if status:
             query = query.filter_by(status=status)
         
-        # Order by most recent first
+        # Order by creation date (newest first)
         query = query.order_by(Ticket.created_at.desc())
         
+        # Apply pagination
         paginated = query.paginate(page=page, per_page=per_page, error_out=False)
         
+        # Format tickets with agent name resolution
         tickets = []
         for ticket in paginated.items:
-            # Resolve agent ID to actual name for display
+            # Resolve assigned agent ID to name for display
             assigned_agent_name = None
             if ticket.assigned_to:
                 agent = User.query.get(ticket.assigned_to)
@@ -146,6 +159,7 @@ class TicketListResource(Resource):
                 'sla_violated': ticket.sla_violated
             })
         
+        # Return tickets with pagination metadata
         return {
             'tickets': tickets,
             'pagination': {
@@ -313,15 +327,11 @@ class TicketListResource(Resource):
             return {'error': f'Ticket creation failed: {str(e)}'}, 500
     
     def _auto_assign_ticket(self, priority):
-        """Intelligent auto-assignment to agent with least active workload
-        
-        Queries live database for Technical Users and Technical Supervisors,
-        calculates current workload, and assigns to agent with least active tickets.
-        """
+        """Auto-assign ticket to agent with least workload"""
         try:
-            # Get agents with their current workload using ORM
             from sqlalchemy import func
             
+            # Query agents with current active ticket counts
             agents_workload = db.session.query(
                 User.id,
                 User.name,
@@ -329,13 +339,13 @@ class TicketListResource(Resource):
             ).outerjoin(
                 Ticket, 
                 (User.id == Ticket.assigned_to) & 
-                (~Ticket.status.in_(['Resolved', 'Closed']))
+                (~Ticket.status.in_(['Resolved', 'Closed']))  # Only count open tickets
             ).filter(
-                User.role.in_(['Technical User', 'Technical Supervisor'])
+                User.role.in_(['Technical User', 'Technical Supervisor'])  # Only assignable roles
             ).group_by(
                 User.id, User.name
             ).order_by(
-                'workload', User.id
+                'workload', User.id  # Assign to agent with least workload
             ).first()
             
             if agents_workload:
@@ -352,17 +362,17 @@ class TicketListResource(Resource):
 
 
 class TicketResource(Resource):
-    """Individual ticket operations with flexible ID handling"""
+    """Individual ticket operations"""
     
     def get(self, ticket_id):
-        """Get ticket by ID or ticket_id (TKT-XXXX format)"""
+        """Get single ticket by ID or ticket_id format"""
         try:
-            # Try to find by ticket_id first (TKT-XXXX format)
+            # Search by ticket_id (TKT-XXXX) first, then by numeric ID
             ticket = Ticket.query.filter_by(ticket_id=ticket_id).first()
             if not ticket:
-                # Try to find by numeric ID
                 ticket = Ticket.query.get_or_404(ticket_id)
             
+            # Return complete ticket information
             return {
                 'id': ticket.id,
                 'ticket_id': ticket.ticket_id,
@@ -382,31 +392,33 @@ class TicketResource(Resource):
             return {'error': f'Ticket not found: {str(e)}'}, 404
     
     def put(self, ticket_id):
+        """Update ticket with change tracking"""
         try:
-            # Try to find by ticket_id first (TKT-XXXX format)
+            # Find ticket by ID or ticket_id format
             ticket = Ticket.query.filter_by(ticket_id=ticket_id).first()
             if not ticket:
-                # Try to find by numeric ID
                 ticket = Ticket.query.get_or_404(ticket_id)
             
+            # Parse update data
             data = request.get_json()
+            
+            # Store original values for change tracking
             old_status = ticket.status
             old_assigned_to = ticket.assigned_to
             old_priority = ticket.priority
-            
-            # Track changes for activity log
             changes = []
             
-            # Update ticket fields and track changes
+            # Update status and track changes
             if 'status' in data and data['status'] != old_status:
                 ticket.status = data['status']
                 changes.append(f'Status changed from {old_status} to {data["status"]}')
                 
-                # Set resolved_at when ticket is resolved
+                # Set resolution timestamp for closed tickets
                 if data['status'] in ['Resolved', 'Closed']:
                     from datetime import datetime
                     ticket.resolved_at = datetime.utcnow()
                     
+            # Update assignment and track changes
             if 'assigned_to' in data and data['assigned_to'] != old_assigned_to:
                 ticket.assigned_to = data['assigned_to']
                 if data['assigned_to']:
@@ -416,19 +428,22 @@ class TicketResource(Resource):
                 else:
                     changes.append('Unassigned')
                     
+            # Update priority and track changes
             if 'priority' in data and data['priority'] != old_priority:
                 ticket.priority = data['priority']
                 changes.append(f'Priority changed from {old_priority} to {data["priority"]}')
             
+            # Save changes to database
             db.session.commit()
             
-            # Create activity records for changes
+            # Log activities to memory store (production should use database)
             if changes:
                 from app import activity_store
                 from datetime import datetime
                 
                 performed_by_name = data.get('performed_by_name', 'System')
                 
+                # Create activity record for each change
                 for change in changes:
                     activity = {
                         'id': f'update_{ticket.ticket_id}_{len(activity_store.get(ticket.ticket_id, []))}',
@@ -440,10 +455,12 @@ class TicketResource(Resource):
                         'timestamp': datetime.utcnow().isoformat() + 'Z'
                     }
                     
+                    # Store activity in memory (temporary)
                     if ticket.ticket_id not in activity_store:
                         activity_store[ticket.ticket_id] = []
                     activity_store[ticket.ticket_id].append(activity)
             
+            # Return updated ticket data
             return {
                 'id': ticket.id,
                 'ticket_id': ticket.ticket_id,
@@ -464,13 +481,14 @@ class TicketResource(Resource):
             return {'error': f'Update failed: {str(e)}'}, 500
     
     def delete(self, ticket_id):
+        """Delete ticket and related data"""
         try:
-            # Try to find by ticket_id first (TKT-XXXX format)
+            # Find ticket by ID or ticket_id format
             ticket = Ticket.query.filter_by(ticket_id=ticket_id).first()
             if not ticket:
-                # Try to find by numeric ID
                 ticket = Ticket.query.get_or_404(ticket_id)
             
+            # Delete ticket (cascade will handle related messages/alerts)
             db.session.delete(ticket)
             db.session.commit()
             return {'success': True, 'message': 'Ticket deleted'}

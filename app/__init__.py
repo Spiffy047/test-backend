@@ -1,23 +1,14 @@
 
-# Creates and configures Flask application with intelligent auto-assignment,
-# advanced file upload support, and comprehensive analytics capabilities.
+# Flask application factory for IT ServiceDesk
 
-# Core Flask imports
+# Core Flask and database imports
 from flask import Flask, request, jsonify, Response
-
-# Database and ORM
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-
-# Security and authentication
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
-
-# Serialization and validation
 from flask_marshmallow import Marshmallow
 from marshmallow import ValidationError
-
-# Configuration and utilities
 from dotenv import load_dotenv
 from datetime import datetime
 import os
@@ -26,48 +17,35 @@ import uuid
 # Load environment variables from .env file
 load_dotenv()
 
-# Initialize Flask extensions (will be bound to app in create_app)
+# Initialize Flask extensions
 db = SQLAlchemy()  # Database ORM
 migrate = Migrate()  # Database migrations
-jwt = JWTManager()  # JWT token management (currently disabled)
-ma = Marshmallow()  # Object serialization/deserialization
+jwt = JWTManager()  # JWT authentication
+ma = Marshmallow()  # Object serialization
 
 def create_app(config_name='default'):
-    """Flask application factory with enhanced features
-    
-    Creates Flask app with intelligent auto-assignment, file upload support,
-    and comprehensive analytics. Includes database initialization, JWT auth,
-    and dynamic configuration management.
-    
-    Args:
-        config_name (str): Environment configuration
-    
-    Returns:
-        Flask: Fully configured application instance
-    """
-    # Create Flask application instance
+    """Create and configure Flask application"""
+    # Create Flask app instance
     app = Flask(__name__)
     
-    # === CONFIGURATION LOADING ===
     # Load configuration based on environment
     from config import config
     app.config.from_object(config[config_name])
-    
-    # === DATABASE INITIALIZATION ===
-    # Initialize PostgreSQL with configuration tables and fallback support
+    # Initialize database with error handling and fallback
     try:
-        # Bind SQLAlchemy and Flask-Migrate to app
+        # Bind database extensions to app
         db.init_app(app)
         migrate.init_app(app, db)
         print("[OK] Database initialized successfully")
         
-        # Create database tables if they don't exist
+        # Create database tables and initialize configuration
         with app.app_context():
             try:
+                # Create all database tables
                 db.create_all()
                 print("[OK] Database tables initialized successfully")
                 
-                # Initialize configuration tables (safe - won't affect existing data)
+                # Initialize default configuration data
                 try:
                     from app.services.configuration_service import ConfigurationService
                     ConfigurationService.initialize_default_configuration()
@@ -78,23 +56,21 @@ def create_app(config_name='default'):
                 print(f"[WARNING] Database table creation error: {e}")
                 
     except Exception as e:
+        # Fallback to in-memory SQLite if PostgreSQL fails
         print(f"[ERROR] Database initialization failed: {e}")
-        # Fallback to in-memory SQLite for basic functionality
         print("[RETRY] Falling back to in-memory SQLite database")
         app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         db.init_app(app)
     
-    # === EXTENSION INITIALIZATION ===
-    # Configure JWT authentication and serialization
-    
-    # JWT Configuration
+    # Configure JWT authentication
     app.config['JWT_SECRET_KEY'] = 'hardcoded-jwt-secret-key-for-testing-12345'
-    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = False  
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = False  # Tokens don't expire for development
     
-    jwt.init_app(app)  # JWT authentication
-    ma.init_app(app)   # Marshmallow serialization
+    # Initialize JWT and Marshmallow extensions
+    jwt.init_app(app)
+    ma.init_app(app)
     
-    # JWT Error Handlers
+    # JWT error handlers for authentication failures
     @jwt.expired_token_loader
     def expired_token_callback(jwt_header, jwt_payload):
         return {'error': 'Token has expired'}, 401
@@ -109,45 +85,42 @@ def create_app(config_name='default'):
     
     
     
-    # === CORS CONFIGURATION ===
-    # Enable cross-origin requests for React frontend integration
-    # Configured for development with production-ready security options
+    # Configure CORS for React frontend communication
     CORS(app, 
-         resources={r"/*": {"origins": "*"}},  # Allow all origins (dev only)
+         resources={r"/*": {"origins": "*"}},  # Allow all origins for development
          allow_headers=["Content-Type", "Authorization", "X-Requested-With", "X-CSRF-Token"],
          methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
          supports_credentials=False  # Disabled for deployment compatibility
     )
     
-    # === BLUEPRINT REGISTRATION ===
-    # Register API endpoints with intelligent auto-assignment and file upload support
+    # Register API blueprints for modular routing
     
-    # Configuration management
+    # Configuration management endpoints
     from app.routes.config import config_bp
     app.register_blueprint(config_bp, url_prefix='/api/config')
     print("[OK] Configuration routes registered")
     
-    # Database initialization
+    # Database initialization endpoints
     from app.routes.db_init import db_init_bp
     app.register_blueprint(db_init_bp, url_prefix='/api/db')
     print("[OK] Database init routes registered")
     
-    # Main RESTful API endpoints (tickets, users, etc.) - MUST BE FIRST
+    # Main RESTful API endpoints (tickets, users, messages)
     from app.api import api_bp
     app.register_blueprint(api_bp, url_prefix='/api')
     print("[OK] RESTful API routes registered")
     
-    # Register Swagger documentation (after API to avoid conflicts)
+    # Swagger API documentation
     from app.swagger import swagger_bp
     app.register_blueprint(swagger_bp, url_prefix='/api/docs')
     print("[OK] Swagger documentation registered at /api/docs/")
     
-    # Administrative endpoints (system management)
+    # Administrative endpoints
     from app.routes.admin import admin_bp
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
-    print(" Admin routes registered")
+    print("[OK] Admin routes registered")
     
-    # Migration endpoints
+    # Database migration utilities
     from app.routes.migration import migration_bp
     app.register_blueprint(migration_bp, url_prefix='/api/migration')
     print("[OK] Migration routes registered")
@@ -157,15 +130,12 @@ def create_app(config_name='default'):
     app.register_blueprint(status_bp, url_prefix='/api/status')
     print("[OK] Status workflow routes registered")
     
-    # File routes removed - using frontend Cloudinary integration
     
-    
-    # === CORE API ENDPOINTS ===
-    # System health, testing, and analytics endpoints
+    # Core API endpoints for system health and testing
     
     @app.route('/')
     def index():
-        """API root endpoint - returns basic system information"""
+        """API root - returns system status and version info"""
         return {
             'message': 'Hotfix ServiceDesk API', 
             'version': '2.0.0', 
@@ -173,11 +143,9 @@ def create_app(config_name='default'):
             'documentation': 'Contact system administrator for API documentation'
         }
     
-    # Health check endpoint removed - using /api/test instead
-    
     @app.route('/api/test')
     def test_api():
-        """Simple API test endpoint for connectivity verification"""
+        """Basic connectivity test endpoint"""
         return {
             'message': 'API is working', 
             'status': 'ok',
@@ -186,9 +154,10 @@ def create_app(config_name='default'):
     
     @app.route('/api/test/users')
     def test_users():
-        """Test endpoint to check users without JWT protection"""
+        """Test database connectivity by fetching sample users"""
         try:
             from app.models import User
+            # Get first 5 users to test database connection
             users_query = User.query.limit(5).all()
             users = []
             for user in users_query:
@@ -204,16 +173,16 @@ def create_app(config_name='default'):
     
     @app.route('/api/test/create-user', methods=['POST'])
     def create_test_user():
-        """Create a test user for JWT testing"""
+        """Create test user for development and testing"""
         try:
             from app.models import User
             
-            # Check if test user already exists
+            # Check if test user already exists to avoid duplicates
             existing = User.query.filter_by(email='test@test.com').first()
             if existing:
                 return {'message': 'Test user already exists', 'email': 'test@test.com'}
             
-            # Create test user
+            # Create new test user with admin privileges
             user = User(
                 name='Test User',
                 email='test@test.com',
@@ -221,6 +190,7 @@ def create_app(config_name='default'):
             )
             user.set_password('test123')
             
+            # Save to database
             db.session.add(user)
             db.session.commit()
             
@@ -235,30 +205,28 @@ def create_app(config_name='default'):
     
 
     
-    # Note: Authentication endpoints moved to Flask-RESTful resources
-    
-    # === ANALYTICS ENDPOINTS ===
-    # Real-time dashboard metrics with live database queries
+    # Analytics endpoints for dashboard metrics
     
     @app.route('/api/tickets/analytics/sla-adherence')
     def sla_adherence():
-        """Real-time SLA adherence calculation using ORM"""
+        """Calculate SLA adherence percentage from ticket data"""
         try:
             from app.models import Ticket
             from sqlalchemy import func, case
             
-            # Query ticket SLA statistics using ORM
+            # Query SLA statistics using ORM aggregation
             result = db.session.query(
                 func.count(Ticket.id).label('total_tickets'),
                 func.count(case([(Ticket.sla_violated == False, 1)])).label('on_time'),
                 func.count(case([(Ticket.sla_violated == True, 1)])).label('violations')
             ).first()
             
+            # Extract values with null safety
             total_tickets = result.total_tickets or 0
             on_time = result.on_time or 0
             violations = result.violations or 0
             
-            # Calculate SLA adherence percentage (avoid division by zero)
+            # Calculate adherence percentage with division by zero protection
             sla_adherence = (on_time / total_tickets * 100) if total_tickets > 0 else 0
             
             return {
@@ -280,7 +248,7 @@ def create_app(config_name='default'):
     
     @app.route('/api/agents/performance')
     def agent_performance():
-        """Agent performance metrics using ORM"""
+        """Get performance metrics for all technical agents"""
         try:
             from app.models import User, Ticket
             from sqlalchemy import func, case, extract
@@ -336,7 +304,7 @@ def create_app(config_name='default'):
     
     @app.route('/api/agents')
     def agents_list():
-        """Get list of all agents using ORM"""
+        """Get list of all assignable agents (Technical Users and Supervisors)"""
         try:
             from app.models import User
             
@@ -357,19 +325,23 @@ def create_app(config_name='default'):
     
     @app.route('/api/analytics/ticket-status-counts')
     def ticket_status_counts():
+        """Get ticket counts grouped by status for dashboard widgets"""
         try:
             from app.models import Ticket
             from sqlalchemy import func
             
+            # Query ticket counts by status
             result = db.session.query(
                 Ticket.status,
                 func.count(Ticket.id).label('count')
             ).group_by(Ticket.status).all()
             
+            # Initialize standard status categories
             counts = {'new': 0, 'open': 0, 'pending': 0, 'closed': 0}
+            
+            # Map database statuses to standard categories
             for row in result:
                 status = row.status.lower()
-                # Map database status values to expected keys
                 if status == 'resolved':
                     counts['closed'] += row.count
                 elif status == 'in progress':
@@ -377,7 +349,7 @@ def create_app(config_name='default'):
                 elif status in ['new', 'open', 'pending']:
                     counts[status] = row.count
                 else:
-                    # Handle any other status by mapping to appropriate category
+                    # Handle custom statuses by keyword matching
                     if 'close' in status or 'resolve' in status:
                         counts['closed'] += row.count
                     elif 'progress' in status or 'active' in status:
@@ -392,18 +364,20 @@ def create_app(config_name='default'):
     
     @app.route('/api/analytics/unassigned-tickets')
     def unassigned_tickets():
+        """Get list of tickets that need agent assignment"""
         try:
             from app.models import Ticket
             from datetime import datetime
             
+            # Query unassigned open tickets
             tickets_query = Ticket.query.filter(
-                Ticket.assigned_to.is_(None),
-                ~Ticket.status.in_(['Closed', 'Resolved'])
+                Ticket.assigned_to.is_(None),  # No agent assigned
+                ~Ticket.status.in_(['Closed', 'Resolved'])  # Still open
             ).order_by(Ticket.created_at.desc()).limit(20).all()
             
             tickets = []
             for ticket in tickets_query:
-                # Calculate hours open
+                # Calculate how long ticket has been open
                 if ticket.created_at:
                     hours_open = (datetime.utcnow() - ticket.created_at).total_seconds() / 3600
                 else:
@@ -427,10 +401,12 @@ def create_app(config_name='default'):
     
     @app.route('/api/analytics/agent-workload')
     def agent_workload():
+        """Get current workload distribution across all agents"""
         try:
             from app.models import User, Ticket
             from sqlalchemy import func, case
             
+            # Query agent workload using ORM with ticket counts by status
             result = db.session.query(
                 User.id,
                 User.name,
@@ -448,6 +424,7 @@ def create_app(config_name='default'):
                 User.id, User.name, User.email, User.role
             ).order_by(User.name).all()
             
+            # Format response data
             agents = []
             for row in result:
                 agents.append({
@@ -469,10 +446,12 @@ def create_app(config_name='default'):
     
     @app.route('/api/analytics/agent-performance-detailed')
     def agent_performance_detailed():
+        """Get detailed performance metrics with ratings and scores"""
         try:
             from app.models import User, Ticket
             from sqlalchemy import func, case, extract
             
+            # Query detailed performance metrics
             result = db.session.query(
                 User.id,
                 User.name,
@@ -497,12 +476,24 @@ def create_app(config_name='default'):
                 User.id, User.name, User.email, User.role
             ).order_by(User.name).all()
             
+            # Calculate performance scores and ratings
             agents = []
             for row in result:
                 closed_tickets = row.closed_tickets or 0
                 sla_violations = row.sla_violations or 0
+                
+                # Performance scoring algorithm: +10 per closed ticket, -5 per SLA violation
                 score = max(0, (closed_tickets * 10) - (sla_violations * 5))
-                rating = 'Excellent' if score >= 50 else 'Good' if score >= 30 else 'Average' if score >= 15 else 'Needs Improvement'
+                
+                # Rating based on performance score
+                if score >= 50:
+                    rating = 'Excellent'
+                elif score >= 30:
+                    rating = 'Good'
+                elif score >= 15:
+                    rating = 'Average'
+                else:
+                    rating = 'Needs Improvement'
                 
                 agents.append({
                     'agent_id': row.id,
@@ -517,7 +508,7 @@ def create_app(config_name='default'):
                     'rating': rating,
                     'performance_rating': rating,
                     'performance_score': score,
-                    'satisfaction_score': 4.0
+                    'satisfaction_score': 4.0  # Static placeholder
                 })
             
             return agents
@@ -527,12 +518,15 @@ def create_app(config_name='default'):
     
     @app.route('/api/alerts/<user_id>/count', methods=['GET', 'OPTIONS'])
     def alert_count(user_id):
+        """Get unread alert count for notification bell"""
+        # Handle CORS preflight request
         if request.method == 'OPTIONS':
             return '', 200
         
         try:
             from app.models import Alert
             
+            # Count unread alerts for specific user
             count = Alert.query.filter_by(
                 user_id=user_id,
                 is_read=False
@@ -545,15 +539,16 @@ def create_app(config_name='default'):
     
     @app.route('/api/messages/ticket/<ticket_id>/timeline')
     def ticket_timeline(ticket_id):
+        """Get chronological message timeline for a ticket"""
         try:
             from app.models import Ticket, Message, User
             
-            # Get ticket using ORM
+            # Find ticket by ticket_id (TKT-XXXX format)
             ticket = Ticket.query.filter_by(ticket_id=ticket_id).first()
             if not ticket:
                 return []
             
-            # Get messages using ORM with join
+            # Get all messages for this ticket with sender info
             messages_query = db.session.query(
                 Message.id,
                 Message.message,
@@ -568,6 +563,7 @@ def create_app(config_name='default'):
                 Message.ticket_id == ticket.id
             ).order_by(Message.created_at.asc()).all()
             
+            # Format messages for frontend
             messages = []
             for row in messages_query:
                 messages.append({
@@ -577,12 +573,12 @@ def create_app(config_name='default'):
                     'sender_name': row.name or 'Unknown User',
                     'sender_role': row.role or 'Normal User',
                     'message': row.message,
-                    'image_url': row.image_url,
+                    'image_url': row.image_url,  # Cloudinary file URL
                     'timestamp': row.created_at.isoformat() + 'Z' if row.created_at else None,
                     'type': 'message'
                 })
             
-            # Add any new messages from memory store
+            # Include any temporary messages from memory store
             if ticket_id in messages_store:
                 messages.extend(messages_store[ticket_id])
             
@@ -593,12 +589,13 @@ def create_app(config_name='default'):
     
     @app.route('/api/tickets/<ticket_id>/activities')
     def ticket_activities(ticket_id):
+        """Get activity log for a ticket (creation, status changes, assignments)"""
         try:
             from app.models import Ticket, User
             
             activities = []
             
-            # Get ticket using ORM
+            # Find ticket by ID or ticket_id
             ticket = None
             if ticket_id.isdigit():
                 ticket = Ticket.query.get(int(ticket_id))
@@ -606,11 +603,11 @@ def create_app(config_name='default'):
                 ticket = Ticket.query.filter_by(ticket_id=ticket_id).first()
             
             if ticket:
-                # Get creator name
+                # Get ticket creator information
                 creator = User.query.get(ticket.created_by) if ticket.created_by else None
                 creator_name = creator.name if creator else "Unknown User"
                 
-                # Ticket creation
+                # Add ticket creation activity
                 activities.append({
                     'id': f'create_{ticket_id}',
                     'ticket_id': ticket_id,
@@ -621,7 +618,7 @@ def create_app(config_name='default'):
                     'timestamp': ticket.created_at.isoformat() + 'Z' if ticket.created_at else None
                 })
                 
-                # Status change activity (if updated)
+                # Add status change activity if ticket was updated
                 if ticket.updated_at and ticket.updated_at != ticket.created_at:
                     activities.append({
                         'id': f'status_{ticket_id}',
@@ -633,7 +630,7 @@ def create_app(config_name='default'):
                         'timestamp': ticket.updated_at.isoformat() + 'Z' if ticket.updated_at else None
                     })
                 
-                # Assignment activity (if assigned)
+                # Add assignment activity if ticket is assigned
                 if ticket.assigned_to:
                     agent = User.query.get(ticket.assigned_to)
                     agent_name = agent.name if agent else f'Agent {ticket.assigned_to}'
@@ -648,11 +645,11 @@ def create_app(config_name='default'):
                         'timestamp': ticket.updated_at.isoformat() + 'Z' if ticket.updated_at else None
                     })
             
-            # Add any stored activities from memory
+            # Include any temporary activities from memory store
             if ticket_id in activity_store:
                 activities.extend(activity_store[ticket_id])
             
-            # Sort by timestamp
+            # Sort activities chronologically
             activities.sort(key=lambda x: x.get('timestamp', x.get('created_at', '')))
             
             return activities
@@ -660,32 +657,33 @@ def create_app(config_name='default'):
             print(f"Error fetching activities for {ticket_id}: {e}")
             return []
     
-    # File upload removed - using frontend Cloudinary integration
-    
-    # Global message and activity storage per ticket (in production, use database)
-    messages_store = {}
-    activity_store = {}
-    
-    # Messages endpoint moved to Flask-RESTful resources
+    # In-memory storage for development (production should use database)
+    messages_store = {}  # Temporary message storage per ticket
+    activity_store = {}  # Temporary activity log storage per ticket
     
     @app.route('/api/alerts/<alert_id>/read', methods=['PUT'])
     def mark_alert_read(alert_id):
+        """Mark specific alert as read (placeholder implementation)"""
         return {'success': True, 'message': 'Alert marked as read'}
     
     @app.route('/api/alerts/<user_id>/read-all', methods=['PUT'])
     def mark_all_alerts_read(user_id):
+        """Mark all user alerts as read (placeholder implementation)"""
         return {'success': True, 'message': 'All alerts marked as read'}
     
     @app.route('/api/analytics/ticket-aging')
     def ticket_aging():
+        """Analyze ticket aging patterns by time buckets"""
         try:
             from app.models import Ticket
             from datetime import datetime
             
+            # Get all open tickets
             tickets = Ticket.query.filter(
                 Ticket.status != 'Closed'
             ).order_by(Ticket.created_at.desc()).all()
             
+            # Initialize aging buckets
             aging_buckets = {
                 '0-24h': [],
                 '24-48h': [],
@@ -696,13 +694,15 @@ def create_app(config_name='default'):
             total_hours = 0
             ticket_count = 0
             
+            # Categorize tickets by age
             for ticket in tickets:
-                # Calculate hours old
+                # Calculate ticket age in hours
                 if ticket.created_at:
                     hours_old = (datetime.utcnow() - ticket.created_at).total_seconds() / 3600
                 else:
                     hours_old = 0
                 
+                # Create ticket data object
                 ticket_data = {
                     'id': ticket.id,
                     'ticket_id': ticket.ticket_id,
@@ -717,9 +717,11 @@ def create_app(config_name='default'):
                     'hours_old': hours_old
                 }
                 
+                # Update totals for average calculation
                 total_hours += hours_old
                 ticket_count += 1
                 
+                # Sort into appropriate aging bucket
                 if hours_old <= 24:
                     aging_buckets['0-24h'].append(ticket_data)
                 elif hours_old <= 48:
@@ -729,6 +731,7 @@ def create_app(config_name='default'):
                 else:
                     aging_buckets['72h+'].append(ticket_data)
             
+            # Calculate average age
             avg_age = (total_hours / ticket_count) if ticket_count > 0 else 0
             
             return {
@@ -744,6 +747,7 @@ def create_app(config_name='default'):
             }
         except Exception as e:
             print(f"Error fetching aging data: {e}")
+            # Return empty structure on error
             return {
                 'aging_data': [
                     {'age_range': '0-24h', 'count': 0},
@@ -758,10 +762,12 @@ def create_app(config_name='default'):
     
     @app.route('/api/analytics/sla-violations')
     def sla_violations():
+        """Get list of tickets that have violated SLA targets"""
         try:
             from app.models import Ticket
             from datetime import datetime
             
+            # Query tickets with SLA violations that are still open
             tickets = Ticket.query.filter(
                 Ticket.sla_violated == True,
                 Ticket.status != 'Closed'
@@ -769,7 +775,7 @@ def create_app(config_name='default'):
             
             violations = []
             for ticket in tickets:
-                # Calculate hours overdue
+                # Calculate how many hours overdue
                 if ticket.created_at:
                     hours_overdue = (datetime.utcnow() - ticket.created_at).total_seconds() / 3600
                 else:
@@ -795,10 +801,12 @@ def create_app(config_name='default'):
     
     @app.route('/api/export/tickets/excel')
     def export_tickets():
+        """Export all tickets to CSV format for download"""
         try:
             from app.models import Ticket, User
             from flask import Response
             
+            # Query all tickets with assigned agent names
             tickets_query = db.session.query(
                 Ticket.ticket_id,
                 Ticket.title,
@@ -811,6 +819,7 @@ def create_app(config_name='default'):
                 User, Ticket.assigned_to == User.id
             ).order_by(Ticket.created_at.desc()).all()
             
+            # Build CSV content
             csv_lines = ['ID,Title,Status,Priority,Category,Created,Assigned']
             for row in tickets_query:
                 created_date = row.created_at.strftime('%Y-%m-%d') if row.created_at else ''
@@ -819,6 +828,7 @@ def create_app(config_name='default'):
             
             csv_data = '\n'.join(csv_lines)
             
+            # Return CSV file as download
             return Response(
                 csv_data,
                 mimetype='text/csv',
@@ -826,34 +836,28 @@ def create_app(config_name='default'):
             )
         except Exception as e:
             print(f"Error exporting tickets: {e}")
+            # Return empty CSV on error
             return Response(
                 'ID,Title,Status,Priority,Category,Created,Assigned\n',
                 mimetype='text/csv',
                 headers={'Content-Disposition': 'attachment; filename=tickets.csv'}
             )
     
-    # Global ticket storage (in production, use database)
-    tickets_store = []
-    
-    # Global counter for new tickets
-    ticket_counter = 5000
-    
-    # Tickets endpoint moved to Flask-RESTful resources
-    
-    # Ticket update endpoint moved to Flask-RESTful resources
-    
-    # Users endpoint moved to Flask-RESTful resources
-    
-    # User detail endpoint moved to Flask-RESTful resources
+    # Development storage (production uses database)
+    tickets_store = []  # Temporary ticket storage
+    ticket_counter = 5000  # Counter for generating ticket IDs
     
     @app.route('/api/alerts/<user_id>', methods=['GET', 'OPTIONS'])
     def user_alerts(user_id):
+        """Get all alerts for a specific user with ticket information"""
+        # Handle CORS preflight request
         if request.method == 'OPTIONS':
             return '', 200
         
         try:
             from app.models import Alert, Ticket
             
+            # Query user alerts with related ticket info
             alerts_query = db.session.query(
                 Alert.id,
                 Alert.title,
@@ -868,8 +872,9 @@ def create_app(config_name='default'):
                 Alert.user_id == user_id
             ).order_by(
                 Alert.created_at.desc()
-            ).limit(20).all()
+            ).limit(20).all()  # Limit to most recent 20 alerts
             
+            # Format alerts for frontend
             alerts = []
             for row in alerts_query:
                 alerts.append({
@@ -887,15 +892,16 @@ def create_app(config_name='default'):
             print(f"Error fetching alerts for user {user_id}: {e}")
             return []
     
-    # File download removed - files served directly from Cloudinary
+
     
     @app.route('/api/sla/realtime-adherence')
     def realtime_sla_adherence():
+        """Comprehensive SLA adherence analysis with priority breakdown"""
         try:
             from app.models import Ticket
             from sqlalchemy import func, case, extract
             
-            # Overall stats using ORM
+            # Calculate overall SLA statistics
             overall_result = db.session.query(
                 func.count(Ticket.id).label('total_tickets'),
                 func.count(case([
@@ -909,15 +915,17 @@ def create_app(config_name='default'):
                 ])).label('open_violated')
             ).first()
             
+            # Extract overall metrics
             total = overall_result.total_tickets or 0
             closed_met = overall_result.closed_met_sla or 0
             closed_violated = overall_result.closed_violated_sla or 0
             open_violated = overall_result.open_violated or 0
             
+            # Calculate overall adherence percentage
             closed_total = closed_met + closed_violated
             adherence_pct = (closed_met / closed_total * 100) if closed_total > 0 else 0
             
-            # Priority breakdown using ORM
+            # Get SLA breakdown by priority level
             priority_result = db.session.query(
                 Ticket.priority,
                 func.count(case([
@@ -936,10 +944,12 @@ def create_app(config_name='default'):
                 Ticket.priority.in_(['Critical', 'High', 'Medium', 'Low'])
             ).group_by(Ticket.priority).all()
             
+            # SLA target hours by priority
             sla_targets = {'Critical': 4, 'High': 8, 'Medium': 24, 'Low': 72}
             priority_breakdown = {}
             average_resolution_times = {}
             
+            # Process priority-specific metrics
             for row in priority_result:
                 priority = row.priority
                 met = row.met_sla or 0
@@ -947,6 +957,7 @@ def create_app(config_name='default'):
                 avg_hours = row.avg_resolution_hours or 0
                 total_priority = met + violated
                 
+                # Priority-specific adherence
                 priority_breakdown[priority] = {
                     'met_sla': met,
                     'violated_sla': violated,
@@ -954,6 +965,7 @@ def create_app(config_name='default'):
                     'target_hours': sla_targets.get(priority, 24)
                 }
                 
+                # Average resolution time analysis
                 average_resolution_times[priority] = {
                     'average_hours': round(avg_hours, 1),
                     'target_hours': sla_targets.get(priority, 24),
@@ -967,7 +979,7 @@ def create_app(config_name='default'):
                     'closed_violated_sla': closed_violated,
                     'closed_adherence_percentage': round(adherence_pct, 1),
                     'open_violated': open_violated,
-                    'open_at_risk': 0  # Would need additional logic to calculate
+                    'open_at_risk': 0  # Placeholder for future enhancement
                 },
                 'priority_breakdown': priority_breakdown,
                 'average_resolution_times': average_resolution_times,
@@ -975,6 +987,7 @@ def create_app(config_name='default'):
             }
         except Exception as e:
             print(f"Error fetching SLA adherence: {e}")
+            # Return empty structure on error
             return {
                 'overall': {'total_tickets': 0, 'closed_met_sla': 0, 'closed_violated_sla': 0, 'closed_adherence_percentage': 0, 'open_violated': 0, 'open_at_risk': 0},
                 'priority_breakdown': {},
@@ -982,4 +995,5 @@ def create_app(config_name='default'):
                 'sla_targets': {'Critical': 4, 'High': 8, 'Medium': 24, 'Low': 72}
             }
     
+    # Return configured Flask application
     return app

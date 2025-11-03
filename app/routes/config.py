@@ -6,7 +6,6 @@ config_bp = Blueprint('config', __name__)
 
 @config_bp.route('/init', methods=['POST'])
 def init_config():
-    """Initialize configuration tables"""
     try:
         ConfigurationService.initialize_default_configuration()
         return jsonify({'success': True, 'message': 'Configuration initialized'})
@@ -15,7 +14,6 @@ def init_config():
 
 @config_bp.route('/priorities', methods=['GET'])
 def get_priorities():
-    """Get all priorities with SLA targets"""
     priorities = TicketPriority.query.filter_by(is_active=True).order_by(TicketPriority.sort_order).all()
     return jsonify([{
         'id': p.id,
@@ -26,7 +24,6 @@ def get_priorities():
 
 @config_bp.route('/statuses', methods=['GET'])
 def get_statuses():
-    """Get all ticket statuses"""
     statuses = TicketStatus.query.filter_by(is_active=True).order_by(TicketStatus.sort_order).all()
     return jsonify([{
         'id': s.id,
@@ -36,7 +33,6 @@ def get_statuses():
 
 @config_bp.route('/categories', methods=['GET'])
 def get_categories():
-    """Get all categories"""
     categories = TicketCategory.query.filter_by(is_active=True).all()
     return jsonify([{
         'id': c.id,
@@ -46,7 +42,6 @@ def get_categories():
 
 @config_bp.route('/roles', methods=['GET'])
 def get_roles():
-    """Get all user roles"""
     roles = UserRole.query.filter_by(is_active=True).all()
     return jsonify([{
         'id': r.id,
