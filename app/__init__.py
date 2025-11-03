@@ -470,42 +470,49 @@ def create_app(config_name='default'):
     @app.route('/api/analytics/agent-performance-detailed')
     def agent_performance_detailed():
         try:
-            from sqlalchemy import text
+            from app.models import User, Ticket
+            from sqlalchemy import func, case, extract
             
-            result = db.session.execute(text("""
-                SELECT 
-                    u.id,
-                    u.name,
-                    u.email,
-                    u.role,
-                    COALESCE(COUNT(CASE WHEN t.status NOT IN ('Resolved', 'Closed') THEN 1 END), 0) as active_tickets,
-                    COALESCE(COUNT(CASE WHEN t.status IN ('Resolved', 'Closed') THEN 1 END), 0) as closed_tickets,
-                    COALESCE(COUNT(CASE WHEN t.sla_violated = true THEN 1 END), 0) as sla_violations,
-                    COALESCE(AVG(CASE WHEN t.status IN ('Resolved', 'Closed') THEN 
-                        EXTRACT(EPOCH FROM (t.updated_at - t.created_at))/3600 END), 0) as avg_handle_time
-                FROM users u
-                LEFT JOIN tickets t ON u.id = t.assigned_to
-                WHERE u.role IN ('Technical User', 'Technical Supervisor')
-                GROUP BY u.id, u.name, u.email, u.role
-                ORDER BY u.name
-            """))
+            result = db.session.query(
+                User.id,
+                User.name,
+                User.email,
+                User.role,
+                func.coalesce(func.count(case([(~Ticket.status.in_(['Resolved', 'Closed']), 1)])), 0).label('active_tickets'),
+                func.coalesce(func.count(case([(Ticket.status.in_(['Resolved', 'Closed']), 1)])), 0).label('closed_tickets'),
+                func.coalesce(func.count(case([(Ticket.sla_violated == True, 1)])), 0).label('sla_violations'),
+                func.coalesce(
+                    func.avg(
+                        case([
+                            (Ticket.status.in_(['Resolved', 'Closed']),
+                             extract('epoch', Ticket.updated_at - Ticket.created_at) / 3600)
+                        ])
+                    ), 0
+                ).label('avg_handle_time')
+            ).outerjoin(
+                Ticket, User.id == Ticket.assigned_to
+            ).filter(
+                User.role.in_(['Technical User', 'Technical Supervisor'])
+            ).group_by(
+                User.id, User.name, User.email, User.role
+            ).order_by(User.name).all()
             
             agents = []
             for row in result:
-                closed_tickets = row[5] or 0
-                sla_violations = row[6] or 0
+                closed_tickets = row.closed_tickets or 0
+                sla_violations = row.sla_violations or 0
                 score = max(0, (closed_tickets * 10) - (sla_violations * 5))
                 rating = 'Excellent' if score >= 50 else 'Good' if score >= 30 else 'Average' if score >= 15 else 'Needs Improvement'
                 
                 agents.append({
-                    'agent_id': row[0],
-                    'id': row[0],
-                    'name': row[1],
-                    'email': row[2],
-                    'role': row[3],
-                    'active_tickets': row[4],
+                    'agent_id': row.id,
+                    'id': row.id,
+                    'name': row.name,
+                    'email': row.email,
+                    'role': row.role,
+                    'active_tickets': row.active_tickets,
                     'closed_tickets': closed_tickets,
-                    'avg_handle_time': round(row[7] or 0, 1),
+                    'avg_handle_time': round(row.avg_handle_time or 0, 1),
                     'sla_violations': sla_violations,
                     'rating': rating,
                     'performance_rating': rating,
@@ -672,26 +679,12 @@ def create_app(config_name='default'):
     @app.route('/api/analytics/ticket-aging')
     def ticket_aging():
         try:
-            from sqlalchemy import text
+            from app.models import Ticket
             from datetime import datetime
             
-            result = db.session.execute(text("""
-                SELECT 
-                    id,
-                    ticket_id,
-                    title,
-                    status,
-                    priority,
-                    category,
-                    created_by,
-                    assigned_to,
-                    created_at,
-                    sla_violated,
-                    EXTRACT(EPOCH FROM (NOW() - created_at))/3600 as hours_old
-                FROM tickets 
-                WHERE status != 'Closed'
-                ORDER BY created_at DESC
-            """))
+            tickets = Ticket.query.filter(
+                Ticket.status != 'Closed'
+            ).order_by(Ticket.created_at.desc()).all()
             
             aging_buckets = {
                 '0-24h': [],
@@ -703,33 +696,38 @@ def create_app(config_name='default'):
             total_hours = 0
             ticket_count = 0
             
-            for row in result:
-                ticket = {
-                    'id': row[0],
-                    'ticket_id': row[1],
-                    'title': row[2],
-                    'status': row[3],
-                    'priority': row[4],
-                    'category': row[5],
-                    'created_by': row[6],
-                    'assigned_to': row[7],
-                    'created_at': row[8].isoformat() if row[8] else None,
-                    'sla_violated': row[9],
-                    'hours_old': float(row[10]) if row[10] else 0
+            for ticket in tickets:
+                # Calculate hours old
+                if ticket.created_at:
+                    hours_old = (datetime.utcnow() - ticket.created_at).total_seconds() / 3600
+                else:
+                    hours_old = 0
+                
+                ticket_data = {
+                    'id': ticket.id,
+                    'ticket_id': ticket.ticket_id,
+                    'title': ticket.title,
+                    'status': ticket.status,
+                    'priority': ticket.priority,
+                    'category': ticket.category,
+                    'created_by': ticket.created_by,
+                    'assigned_to': ticket.assigned_to,
+                    'created_at': ticket.created_at.isoformat() if ticket.created_at else None,
+                    'sla_violated': ticket.sla_violated,
+                    'hours_old': hours_old
                 }
                 
-                hours_old = ticket['hours_old']
                 total_hours += hours_old
                 ticket_count += 1
                 
                 if hours_old <= 24:
-                    aging_buckets['0-24h'].append(ticket)
+                    aging_buckets['0-24h'].append(ticket_data)
                 elif hours_old <= 48:
-                    aging_buckets['24-48h'].append(ticket)
+                    aging_buckets['24-48h'].append(ticket_data)
                 elif hours_old <= 72:
-                    aging_buckets['48-72h'].append(ticket)
+                    aging_buckets['48-72h'].append(ticket_data)
                 else:
-                    aging_buckets['72h+'].append(ticket)
+                    aging_buckets['72h+'].append(ticket_data)
             
             avg_age = (total_hours / ticket_count) if ticket_count > 0 else 0
             
@@ -761,38 +759,33 @@ def create_app(config_name='default'):
     @app.route('/api/analytics/sla-violations')
     def sla_violations():
         try:
-            from sqlalchemy import text
+            from app.models import Ticket
+            from datetime import datetime
             
-            result = db.session.execute(text("""
-                SELECT 
-                    id,
-                    ticket_id,
-                    title,
-                    priority,
-                    category,
-                    status,
-                    created_by,
-                    assigned_to,
-                    created_at,
-                    EXTRACT(EPOCH FROM (NOW() - created_at))/3600 as hours_old
-                FROM tickets 
-                WHERE sla_violated = true AND status != 'Closed'
-                ORDER BY created_at ASC
-            """))
+            tickets = Ticket.query.filter(
+                Ticket.sla_violated == True,
+                Ticket.status != 'Closed'
+            ).order_by(Ticket.created_at.asc()).all()
             
             violations = []
-            for row in result:
+            for ticket in tickets:
+                # Calculate hours overdue
+                if ticket.created_at:
+                    hours_overdue = (datetime.utcnow() - ticket.created_at).total_seconds() / 3600
+                else:
+                    hours_overdue = 0
+                
                 violations.append({
-                    'id': row[0],
-                    'ticket_id': row[1],
-                    'title': row[2],
-                    'priority': row[3],
-                    'category': row[4],
-                    'status': row[5],
-                    'created_by': row[6],
-                    'assigned_to': row[7],
-                    'created_at': row[8].isoformat() if row[8] else None,
-                    'hours_overdue': round(float(row[9]), 1) if row[9] else 0
+                    'id': ticket.id,
+                    'ticket_id': ticket.ticket_id,
+                    'title': ticket.title,
+                    'priority': ticket.priority,
+                    'category': ticket.category,
+                    'status': ticket.status,
+                    'created_by': ticket.created_by,
+                    'assigned_to': ticket.assigned_to,
+                    'created_at': ticket.created_at.isoformat() if ticket.created_at else None,
+                    'hours_overdue': round(hours_overdue, 1)
                 })
             
             return violations
@@ -803,22 +796,26 @@ def create_app(config_name='default'):
     @app.route('/api/export/tickets/excel')
     def export_tickets():
         try:
-            from sqlalchemy import text
+            from app.models import Ticket, User
             from flask import Response
             
-            result = db.session.execute(text("""
-                SELECT t.ticket_id, t.title, t.status, t.priority, t.category, 
-                       t.created_at, u.name as assigned_name
-                FROM tickets t
-                LEFT JOIN users u ON t.assigned_to = u.id
-                ORDER BY t.created_at DESC
-            """))
+            tickets_query = db.session.query(
+                Ticket.ticket_id,
+                Ticket.title,
+                Ticket.status,
+                Ticket.priority,
+                Ticket.category,
+                Ticket.created_at,
+                User.name.label('assigned_name')
+            ).outerjoin(
+                User, Ticket.assigned_to == User.id
+            ).order_by(Ticket.created_at.desc()).all()
             
             csv_lines = ['ID,Title,Status,Priority,Category,Created,Assigned']
-            for row in result:
-                created_date = row[5].strftime('%Y-%m-%d') if row[5] else ''
-                assigned_name = row[6] or ''
-                csv_lines.append(f'{row[0]},{row[1]},{row[2]},{row[3]},{row[4]},{created_date},{assigned_name}')
+            for row in tickets_query:
+                created_date = row.created_at.strftime('%Y-%m-%d') if row.created_at else ''
+                assigned_name = row.assigned_name or ''
+                csv_lines.append(f'{row.ticket_id},{row.title},{row.status},{row.priority},{row.category},{created_date},{assigned_name}')
             
             csv_data = '\n'.join(csv_lines)
             
@@ -895,62 +892,72 @@ def create_app(config_name='default'):
     @app.route('/api/sla/realtime-adherence')
     def realtime_sla_adherence():
         try:
-            from sqlalchemy import text
+            from app.models import Ticket
+            from sqlalchemy import func, case, extract
             
-            # Overall stats
-            overall_result = db.session.execute(text("""
-                SELECT 
-                    COUNT(*) as total_tickets,
-                    COUNT(CASE WHEN status IN ('Resolved', 'Closed') AND sla_violated = false THEN 1 END) as closed_met_sla,
-                    COUNT(CASE WHEN status IN ('Resolved', 'Closed') AND sla_violated = true THEN 1 END) as closed_violated_sla,
-                    COUNT(CASE WHEN status NOT IN ('Resolved', 'Closed') AND sla_violated = true THEN 1 END) as open_violated
-                FROM tickets
-            """))
+            # Overall stats using ORM
+            overall_result = db.session.query(
+                func.count(Ticket.id).label('total_tickets'),
+                func.count(case([
+                    ((Ticket.status.in_(['Resolved', 'Closed'])) & (Ticket.sla_violated == False), 1)
+                ])).label('closed_met_sla'),
+                func.count(case([
+                    ((Ticket.status.in_(['Resolved', 'Closed'])) & (Ticket.sla_violated == True), 1)
+                ])).label('closed_violated_sla'),
+                func.count(case([
+                    ((~Ticket.status.in_(['Resolved', 'Closed'])) & (Ticket.sla_violated == True), 1)
+                ])).label('open_violated')
+            ).first()
             
-            overall_row = overall_result.fetchone()
-            total = overall_row[0] or 0
-            closed_met = overall_row[1] or 0
-            closed_violated = overall_row[2] or 0
-            open_violated = overall_row[3] or 0
+            total = overall_result.total_tickets or 0
+            closed_met = overall_result.closed_met_sla or 0
+            closed_violated = overall_result.closed_violated_sla or 0
+            open_violated = overall_result.open_violated or 0
             
             closed_total = closed_met + closed_violated
             adherence_pct = (closed_met / closed_total * 100) if closed_total > 0 else 0
             
-            # Priority breakdown
-            priority_result = db.session.execute(text("""
-                SELECT 
-                    priority,
-                    COUNT(CASE WHEN status IN ('Resolved', 'Closed') AND sla_violated = false THEN 1 END) as met_sla,
-                    COUNT(CASE WHEN status IN ('Resolved', 'Closed') AND sla_violated = true THEN 1 END) as violated_sla,
-                    AVG(CASE WHEN status IN ('Resolved', 'Closed') AND resolved_at IS NOT NULL THEN 
-                        EXTRACT(EPOCH FROM (resolved_at - created_at))/3600 END) as avg_resolution_hours
-                FROM tickets
-                WHERE priority IN ('Critical', 'High', 'Medium', 'Low')
-                GROUP BY priority
-            """))
+            # Priority breakdown using ORM
+            priority_result = db.session.query(
+                Ticket.priority,
+                func.count(case([
+                    ((Ticket.status.in_(['Resolved', 'Closed'])) & (Ticket.sla_violated == False), 1)
+                ])).label('met_sla'),
+                func.count(case([
+                    ((Ticket.status.in_(['Resolved', 'Closed'])) & (Ticket.sla_violated == True), 1)
+                ])).label('violated_sla'),
+                func.avg(
+                    case([
+                        ((Ticket.status.in_(['Resolved', 'Closed'])) & (Ticket.resolved_at.isnot(None)),
+                         extract('epoch', Ticket.resolved_at - Ticket.created_at) / 3600)
+                    ])
+                ).label('avg_resolution_hours')
+            ).filter(
+                Ticket.priority.in_(['Critical', 'High', 'Medium', 'Low'])
+            ).group_by(Ticket.priority).all()
             
             sla_targets = {'Critical': 4, 'High': 8, 'Medium': 24, 'Low': 72}
             priority_breakdown = {}
             average_resolution_times = {}
             
             for row in priority_result:
-                priority = row[0]
-                met = row[1] or 0
-                violated = row[2] or 0
-                avg_hours = row[3] or 0
+                priority = row.priority
+                met = row.met_sla or 0
+                violated = row.violated_sla or 0
+                avg_hours = row.avg_resolution_hours or 0
                 total_priority = met + violated
                 
                 priority_breakdown[priority] = {
                     'met_sla': met,
                     'violated_sla': violated,
                     'adherence_percentage': round((met / total_priority * 100) if total_priority > 0 else 0, 1),
-                    'target_hours': sla_targets[priority]
+                    'target_hours': sla_targets.get(priority, 24)
                 }
                 
                 average_resolution_times[priority] = {
                     'average_hours': round(avg_hours, 1),
-                    'target_hours': sla_targets[priority],
-                    'within_target': avg_hours <= sla_targets[priority]
+                    'target_hours': sla_targets.get(priority, 24),
+                    'within_target': avg_hours <= sla_targets.get(priority, 24)
                 }
             
             return {

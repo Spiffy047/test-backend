@@ -25,44 +25,31 @@ class TicketListResource(Resource):
     """Handle ticket list operations (GET all, POST new)"""
     
     def get(self):
-        """Retrieve all tickets from database with proper formatting"""
+        """Retrieve all tickets using ORM"""
         try:
-            # Import SQLAlchemy text for raw SQL queries
-            from sqlalchemy import text
-            from app import db
+            # Use ORM to get all tickets
+            tickets_query = Ticket.query.order_by(Ticket.created_at.desc()).all()
             
-            # Execute raw SQL query to get all ticket data
-            # Using raw SQL for better performance and compatibility
-            result = db.session.execute(text("""
-                SELECT id, ticket_id, title, description, priority, category, status, 
-                       created_by, assigned_to, created_at, updated_at, sla_violated
-                FROM tickets 
-                ORDER BY created_at DESC
-            """))
-            
-            # Transform database rows into JSON-serializable format
+            # Transform ORM objects into JSON-serializable format
             tickets = []
-            for row in result:
+            for ticket in tickets_query:
                 tickets.append({
-                    # Use ticket_id if available, otherwise generate from numeric id
-                    'id': row[1] or f'TKT-{row[0]}',
-                    'ticket_id': row[1] or f'TKT-{row[0]}',
-                    'title': row[2],
-                    'description': row[3],
-                    'priority': row[4],
-                    'category': row[5],
-                    'status': row[6],
-                    'created_by': row[7],
-                    'assigned_to': row[8],
-                    # Convert datetime objects to ISO format strings
-                    'created_at': row[9].isoformat() if row[9] else None,
-                    'updated_at': row[10].isoformat() if row[10] else None,
-                    'sla_violated': row[11] or False
+                    'id': ticket.ticket_id or f'TKT-{ticket.id}',
+                    'ticket_id': ticket.ticket_id or f'TKT-{ticket.id}',
+                    'title': ticket.title,
+                    'description': ticket.description,
+                    'priority': ticket.priority,
+                    'category': ticket.category,
+                    'status': ticket.status,
+                    'created_by': ticket.created_by,
+                    'assigned_to': ticket.assigned_to,
+                    'created_at': ticket.created_at.isoformat() if ticket.created_at else None,
+                    'updated_at': ticket.updated_at.isoformat() if ticket.updated_at else None,
+                    'sla_violated': ticket.sla_violated or False
                 })
             
             return {'tickets': tickets}
         except Exception as e:
-            # Log error and return empty list to prevent frontend crashes
             print(f"Error fetching tickets: {e}")
             return {'tickets': []}
 
@@ -86,42 +73,35 @@ class TicketListResource(Resource):
             return {'error': 'created_by field is required'}, 400
         
         try:
-            # Generate sequential ticket ID starting from TKT-1001
-            from sqlalchemy import text
-            
-            # Count existing tickets to generate next sequential ID
-            result = db.session.execute(text("SELECT COUNT(*) FROM tickets"))
-            ticket_count = result.scalar() + 1001  # Start numbering from 1001
+            # Generate sequential ticket ID using ORM
+            ticket_count = Ticket.query.count() + 1001  # Start numbering from 1001
             ticket_id = f"TKT-{ticket_count}"
             
-            # Insert new ticket using raw SQL for database compatibility
-            # Using parameterized queries to prevent SQL injection
-            db.session.execute(text("""
-                INSERT INTO tickets (ticket_id, title, description, priority, category, status, created_by, created_at, updated_at)
-                VALUES (:ticket_id, :title, :description, :priority, :category, 'New', :created_by, NOW(), NOW())
-            """), {
-                'ticket_id': ticket_id,
-                'title': data['title'],
-                'description': data['description'],
-                'priority': data.get('priority', 'Medium'),  # Default to Medium if not specified
-                'category': data['category'],
-                'created_by': user_id
-            })
+            # Create new ticket using ORM
+            ticket = Ticket(
+                ticket_id=ticket_id,
+                title=data['title'],
+                description=data['description'],
+                priority=data.get('priority', 'Medium'),
+                category=data['category'],
+                status='New',
+                created_by=user_id
+            )
             
-            # Commit transaction to database
+            db.session.add(ticket)
             db.session.commit()
             
             # Return created ticket data for frontend confirmation
             return {
-                'id': ticket_id,
-                'ticket_id': ticket_id,
-                'title': data['title'],
-                'description': data['description'],
-                'priority': data.get('priority', 'Medium'),
-                'category': data['category'],
-                'status': 'New',
-                'created_by': user_id,
-                'created_at': datetime.utcnow().isoformat() + 'Z'
+                'id': ticket.ticket_id,
+                'ticket_id': ticket.ticket_id,
+                'title': ticket.title,
+                'description': ticket.description,
+                'priority': ticket.priority,
+                'category': ticket.category,
+                'status': ticket.status,
+                'created_by': ticket.created_by,
+                'created_at': ticket.created_at.isoformat() + 'Z' if ticket.created_at else None
             }, 201
             
         except Exception as e:
@@ -134,102 +114,78 @@ class TicketResource(Resource):
     """Handle individual ticket operations (GET, PUT, DELETE)"""
     
     def get(self, ticket_id):
-        """Retrieve specific ticket by ID"""
+        """Retrieve specific ticket using ORM"""
         try:
-            from sqlalchemy import text
-            
-            # Query specific ticket from database - handle both ticket_id and numeric id
+            # Query specific ticket using ORM - handle both ticket_id and numeric id
+            ticket = None
             if ticket_id.startswith('TKT-'):
-                # Search by ticket_id
-                result = db.session.execute(text("""
-                    SELECT id, ticket_id, title, description, priority, category, status, 
-                           created_by, assigned_to, created_at, updated_at, sla_violated
-                    FROM tickets 
-                    WHERE ticket_id = :ticket_id
-                """), {'ticket_id': ticket_id})
+                ticket = Ticket.query.filter_by(ticket_id=ticket_id).first()
             else:
-                # Search by numeric id
-                result = db.session.execute(text("""
-                    SELECT id, ticket_id, title, description, priority, category, status, 
-                           created_by, assigned_to, created_at, updated_at, sla_violated
-                    FROM tickets 
-                    WHERE id = :id
-                """), {'id': ticket_id})
+                ticket = Ticket.query.get(ticket_id)
             
-            row = result.fetchone()
-            if not row:
+            if not ticket:
                 return {'error': 'Ticket not found'}, 404
             
             return {
-                'id': row[1] or f'TKT-{row[0]}',
-                'ticket_id': row[1] or f'TKT-{row[0]}',
-                'title': row[2],
-                'description': row[3],
-                'priority': row[4],
-                'category': row[5],
-                'status': row[6],
-                'created_by': row[7],
-                'assigned_to': row[8],
-                'created_at': row[9].isoformat() if row[9] else None,
-                'updated_at': row[10].isoformat() if row[10] else None,
-                'sla_violated': row[11] or False
+                'id': ticket.ticket_id or f'TKT-{ticket.id}',
+                'ticket_id': ticket.ticket_id or f'TKT-{ticket.id}',
+                'title': ticket.title,
+                'description': ticket.description,
+                'priority': ticket.priority,
+                'category': ticket.category,
+                'status': ticket.status,
+                'created_by': ticket.created_by,
+                'assigned_to': ticket.assigned_to,
+                'created_at': ticket.created_at.isoformat() if ticket.created_at else None,
+                'updated_at': ticket.updated_at.isoformat() if ticket.updated_at else None,
+                'sla_violated': ticket.sla_violated or False
             }
         except Exception as e:
             print(f"Error fetching ticket {ticket_id}: {e}")
             return {'error': 'Failed to retrieve ticket'}, 500
     
     def put(self, ticket_id):
-        """Update existing ticket (status, assignment, etc.)"""
+        """Update existing ticket using ORM"""
         data = request.get_json()
         
         try:
-            from sqlalchemy import text
+            # Find ticket using ORM
+            ticket = None
+            if ticket_id.startswith('TKT-'):
+                ticket = Ticket.query.filter_by(ticket_id=ticket_id).first()
+            else:
+                ticket = Ticket.query.get(ticket_id)
             
-            # Build dynamic update query based on provided fields
-            update_fields = []
-            params = {}
+            if not ticket:
+                return {'error': 'Ticket not found'}, 404
+            
+            # Update fields using ORM
+            updated = False
             
             if 'status' in data:
-                update_fields.append('status = :status')
-                params['status'] = data['status']
+                ticket.status = data['status']
+                updated = True
                 
                 # Set resolved_at timestamp when ticket is resolved
                 if data['status'] in ['Resolved', 'Closed']:
-                    update_fields.append('resolved_at = NOW()')
+                    ticket.resolved_at = datetime.utcnow()
             
             if 'assigned_to' in data:
-                update_fields.append('assigned_to = :assigned_to')
-                params['assigned_to'] = data['assigned_to']
+                ticket.assigned_to = data['assigned_to']
+                updated = True
             
             if 'priority' in data:
-                update_fields.append('priority = :priority')
-                params['priority'] = data['priority']
+                ticket.priority = data['priority']
+                updated = True
             
-            if not update_fields:
+            if not updated:
                 return {'error': 'No valid fields to update'}, 400
             
-            # Add updated_at timestamp
-            update_fields.append('updated_at = NOW()')
-            
-            # Handle both ticket_id and numeric id formats
-            if ticket_id.startswith('TKT-'):
-                where_clause = 'ticket_id = :ticket_id'
-                params['ticket_id'] = ticket_id
-            else:
-                where_clause = 'id = :id'
-                params['id'] = ticket_id
-            
-            # Execute update query
-            query = f"UPDATE tickets SET {', '.join(update_fields)} WHERE {where_clause}"
-            result = db.session.execute(text(query), params)
-            
-            if result.rowcount == 0:
-                return {'error': 'Ticket not found'}, 404
-            
+            # ORM automatically handles updated_at if configured
             db.session.commit()
             
             return {
-                'id': ticket_id,
+                'id': ticket.ticket_id or f'TKT-{ticket.id}',
                 'message': 'Ticket updated successfully'
             }
             
@@ -239,18 +195,19 @@ class TicketResource(Resource):
             return {'error': 'Failed to update ticket'}, 500
     
     def delete(self, ticket_id):
-        """Delete ticket by ID"""
+        """Delete ticket using ORM"""
         try:
-            from sqlalchemy import text
+            # Find and delete ticket using ORM
+            ticket = None
+            if ticket_id.startswith('TKT-'):
+                ticket = Ticket.query.filter_by(ticket_id=ticket_id).first()
+            else:
+                ticket = Ticket.query.get(ticket_id)
             
-            # Delete ticket from database
-            result = db.session.execute(text("""
-                DELETE FROM tickets WHERE ticket_id = :ticket_id
-            """), {'ticket_id': ticket_id})
-            
-            if result.rowcount == 0:
+            if not ticket:
                 return {'error': 'Ticket not found'}, 404
             
+            db.session.delete(ticket)
             db.session.commit()
             return {'message': 'Ticket deleted'}, 204
             

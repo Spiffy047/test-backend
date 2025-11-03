@@ -80,30 +80,25 @@ def fix_ticket_numbering():
         from app.models import Ticket
         tickets = Ticket.query.order_by(Ticket.created_at).all()
         
-        # Update all tickets with proper TKT-XXXX format using SQL
-        db.session.execute(text("""
-            UPDATE tickets 
-            SET id = 'TKT-' || LPAD((ROW_NUMBER() OVER (ORDER BY created_at) + 1000)::text, 4, '0')
-            WHERE id NOT LIKE 'TKT-%'
-        """))
+        # Update tickets using ORM (safer approach)
+        ticket_counter = 1001
+        for ticket in tickets:
+            # Generate new ticket ID
+            new_ticket_id = f'TKT-{ticket_counter:04d}'
+            
+            # Ensure uniqueness
+            while Ticket.query.filter_by(ticket_id=new_ticket_id).first():
+                ticket_counter += 1
+                new_ticket_id = f'TKT-{ticket_counter:04d}'
+            
+            # Update ticket
+            ticket.ticket_id = new_ticket_id
+            ticket_counter += 1
         
-        # Update related tables
-        db.session.execute(text("""
-            UPDATE ticket_messages 
-            SET ticket_id = t.id
-            FROM tickets t
-            WHERE ticket_messages.ticket_id = t.id
-        """))
-        
-        db.session.execute(text("""
-            UPDATE ticket_activities 
-            SET ticket_id = t.id
-            FROM tickets t
-            WHERE ticket_activities.ticket_id = t.id
-        """))
-        
-        # Create sequence for future tickets
+        # Note: Related table updates would need to be handled by proper foreign key relationships
+        # Sequence creation is PostgreSQL-specific DDL that should remain as raw SQL if needed
         next_number = len(tickets) + 1001
+        from sqlalchemy import text
         db.session.execute(text("DROP SEQUENCE IF EXISTS ticket_id_seq CASCADE"))
         db.session.execute(text(f"CREATE SEQUENCE ticket_id_seq START WITH {next_number} INCREMENT BY 1"))
         

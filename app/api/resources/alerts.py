@@ -10,28 +10,35 @@ class AlertListResource(Resource):
     # Swagger documentation disabled for deployment
     def get(self, user_id):
         try:
-            from sqlalchemy import text
+            from app.models import Alert, Ticket
             from app import db
             
-            result = db.session.execute(text("""
-                SELECT a.id, a.title, a.message, a.alert_type, a.is_read, a.created_at, t.ticket_id
-                FROM alerts a
-                LEFT JOIN tickets t ON a.ticket_id = t.id
-                WHERE a.user_id = :user_id
-                ORDER BY a.created_at DESC
-                LIMIT 20
-            """), {'user_id': user_id})
+            alerts_query = db.session.query(
+                Alert.id,
+                Alert.title,
+                Alert.message,
+                Alert.alert_type,
+                Alert.is_read,
+                Alert.created_at,
+                Ticket.ticket_id
+            ).outerjoin(
+                Ticket, Alert.ticket_id == Ticket.id
+            ).filter(
+                Alert.user_id == user_id
+            ).order_by(
+                Alert.created_at.desc()
+            ).limit(20).all()
             
             alerts = []
-            for row in result:
+            for row in alerts_query:
                 alerts.append({
-                    'id': row[0],
-                    'title': row[1],
-                    'message': row[2],
-                    'alert_type': row[3],
-                    'is_read': row[4],
-                    'created_at': row[5].isoformat() + 'Z' if row[5] else None,
-                    'ticket_id': row[6]
+                    'id': row.id,
+                    'title': row.title,
+                    'message': row.message,
+                    'alert_type': row.alert_type,
+                    'is_read': row.is_read,
+                    'created_at': row.created_at.isoformat() + 'Z' if row.created_at else None,
+                    'ticket_id': row.ticket_id
                 })
             
             return alerts
