@@ -453,38 +453,46 @@ def create_app(config_name='default'):
             from app.models import User, Ticket
             from sqlalchemy import func, case, extract
             
-            # Query detailed performance metrics - show all agents even without tickets
-            result = db.session.query(
-                User.id,
-                User.name,
-                User.email,
-                User.role,
-                func.coalesce(func.count(case([(Ticket.assigned_to.isnot(None) & (~Ticket.status.in_(['Resolved', 'Closed'])), 1)])), 0).label('active_tickets'),
-                func.coalesce(func.count(case([(Ticket.assigned_to.isnot(None) & (Ticket.status.in_(['Resolved', 'Closed'])), 1)])), 0).label('closed_tickets'),
-                func.coalesce(func.count(case([(Ticket.assigned_to.isnot(None) & (Ticket.sla_violated == True), 1)])), 0).label('sla_violations'),
-                func.coalesce(
-                    func.avg(
-                        case([
-                            ((Ticket.assigned_to.isnot(None)) & (Ticket.status.in_(['Resolved', 'Closed'])),
-                             extract('epoch', Ticket.updated_at - Ticket.created_at) / 3600)
-                        ])
-                    ), 0
-                ).label('avg_handle_time')
-            ).outerjoin(
-                Ticket, User.id == Ticket.assigned_to
-            ).filter(
+            # Get all technical users first
+            technical_users = User.query.filter(
                 User.role.in_(['Technical User', 'Technical Supervisor'])
-            ).group_by(
-                User.id, User.name, User.email, User.role
-            ).order_by(User.name).all()
+            ).all()
             
-            # Calculate performance scores and ratings
             agents = []
-            for row in result:
-                closed_tickets = row.closed_tickets or 0
-                sla_violations = row.sla_violations or 0
+            for user in technical_users:
+                # Count tickets for each user
+                active_tickets = Ticket.query.filter(
+                    Ticket.assigned_to == user.id,
+                    ~Ticket.status.in_(['Resolved', 'Closed'])
+                ).count()
                 
-                # Performance scoring algorithm: +10 per closed ticket, -5 per SLA violation
+                closed_tickets = Ticket.query.filter(
+                    Ticket.assigned_to == user.id,
+                    Ticket.status.in_(['Resolved', 'Closed'])
+                ).count()
+                
+                sla_violations = Ticket.query.filter(
+                    Ticket.assigned_to == user.id,
+                    Ticket.sla_violated == True
+                ).count()
+                
+                # Calculate average handle time
+                resolved_tickets = Ticket.query.filter(
+                    Ticket.assigned_to == user.id,
+                    Ticket.status.in_(['Resolved', 'Closed']),
+                    Ticket.resolved_at.isnot(None)
+                ).all()
+                
+                avg_handle_time = 0
+                if resolved_tickets:
+                    total_hours = sum([
+                        (ticket.resolved_at - ticket.created_at).total_seconds() / 3600
+                        for ticket in resolved_tickets
+                        if ticket.resolved_at and ticket.created_at
+                    ])
+                    avg_handle_time = total_hours / len(resolved_tickets) if resolved_tickets else 0
+                
+                # Performance scoring algorithm
                 score = max(0, (closed_tickets * 10) - (sla_violations * 5))
                 
                 # Rating based on performance score
@@ -498,19 +506,19 @@ def create_app(config_name='default'):
                     rating = 'Needs Improvement'
                 
                 agents.append({
-                    'agent_id': row.id,
-                    'id': row.id,
-                    'name': row.name,
-                    'email': row.email,
-                    'role': row.role,
-                    'active_tickets': row.active_tickets,
+                    'agent_id': user.id,
+                    'id': user.id,
+                    'name': user.name,
+                    'email': user.email,
+                    'role': user.role,
+                    'active_tickets': active_tickets,
                     'closed_tickets': closed_tickets,
-                    'avg_handle_time': round(row.avg_handle_time or 0, 1),
+                    'avg_handle_time': round(avg_handle_time, 1),
                     'sla_violations': sla_violations,
                     'rating': rating,
                     'performance_rating': rating,
                     'performance_score': score,
-                    'satisfaction_score': 4.0  # Static placeholder
+                    'satisfaction_score': 4.0
                 })
             
             return agents
