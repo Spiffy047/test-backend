@@ -168,14 +168,7 @@ def create_app(config_name='default'):
             'documentation': 'Contact system administrator for API documentation'
         }
     
-    @app.route('/health')
-    def health_check():
-        """Health check endpoint for monitoring and load balancers"""
-        return {
-            'status': 'healthy', 
-            'database': 'connected',
-            'timestamp': datetime.utcnow().isoformat()
-        }
+    # Health check endpoint removed - using /api/test instead
     
     @app.route('/api/test')
     def test_api():
